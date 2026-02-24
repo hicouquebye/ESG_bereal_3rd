@@ -154,8 +154,6 @@ const App: React.FC = () => {
 
   const [fullHistoryData, setFullHistoryData] = useState<TrendData[]>([]);
 
-  const [oilPrices, setOilPrices] = useState<{ brent: number; wti: number }>({ brent: 82.5, wti: 78.4 });
-
   // Simulator State
 
   const [selectedMarket, setSelectedMarket] = useState<MarketType>('K-ETS');
@@ -289,16 +287,6 @@ const App: React.FC = () => {
           }
         } catch (err) {
           console.warn('[System] Market trends fetch failed or timed out:', err);
-        }
-
-        // 2. Oil Prices
-
-        const oil = await MarketService.getOilPrices();
-
-        if (oil && oil.brent) {
-
-          setOilPrices({ brent: oil.brent, wti: oil.wti });
-
         }
 
         // 2. Dashboard Data (Companies & Benchmarks)

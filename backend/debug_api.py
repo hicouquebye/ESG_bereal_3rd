@@ -6,7 +6,6 @@ base_url = "http://localhost:8000"
 endpoints = [
     "/",
     "/docs",
-    "/api/v1/sim/market/oil-prices",
     "/api/v1/sim/dashboard/market-trends?period=1y"
 ]
 

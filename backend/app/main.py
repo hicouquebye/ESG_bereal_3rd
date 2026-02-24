@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-from .routers import simulator, ai, krx, dashboard, auth, profile
+from .routers import simulator, ai, dashboard, auth, profile
 from .services.market_data import market_service
 from .services.ai_service import ai_service
 import asyncio
@@ -34,7 +34,6 @@ app.add_middleware(
 app.include_router(dashboard.router)
 app.include_router(simulator.router)
 app.include_router(ai.router)
-app.include_router(krx.router)
 app.include_router(auth.router)
 app.include_router(profile.router)
 

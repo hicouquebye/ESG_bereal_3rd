@@ -2,7 +2,6 @@ from fastapi import APIRouter, Query
 from sqlalchemy import text
 from ..database import engine
 from ..services.market_data import market_service
-from ..services.oil_price import oil_price_service
 from datetime import datetime, timedelta
 import FinanceDataReader as fdr
 import pandas as pd
@@ -105,9 +104,3 @@ async def get_market_trends(period: str = "1y"):
         print(f"Market Trends Error: {e}")
         return {"period": period, "chart_data": [], "error": str(e)}
 
-@router.get("/market/oil-prices")
-async def get_oil_prices():
-    """
-    [Global] 실시간 유가 정보 (Brent/WTI) 조회
-    """
-    return await oil_price_service.get_latest_prices()
