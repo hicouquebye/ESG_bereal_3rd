@@ -58,11 +58,10 @@ graph TB
 
     subgraph "Backend (FastAPI + Uvicorn, Port 8000)"
         Auth[Auth Router<br/>/auth]
+        Profile[Profile Router<br/>/profile]
         Dashboard[Dashboard Router<br/>/api/v1/dashboard]
         Sim[Simulator Router<br/>/api/v1/sim]
         AI[AI Router<br/>/api/v1/ai]
-        KRX[KRX Router<br/>/api/v1/krx]
-        Profile[Profile Router<br/>/api/v1/profile]
     end
 
     subgraph "Data & AI Layer"
@@ -72,23 +71,20 @@ graph TB
         SBERT[Sentence-BERT<br/>jhgan/ko-sroberta-multitask]
     end
 
-    subgraph "External APIs"
-        yfinance[yfinance<br/>EU-ETS / EUA Futures]
-        FDR[FinanceDataReader<br/>K-ETS / KAU]
-        KRXMarket[KRX Market<br/>KOSPI / KOSDAQ]
-        OilAPI[Oil Price API<br/>WTI / Brent]
+    subgraph "External Data Sources"
+        yfinance[yfinance / yahoo_fin<br/>EU-ETS 가격]
+        FDR[FinanceDataReader<br/>K-ETS KAU 가격]
     end
 
     Browser --> UI
     UI --> State --> Router
-    Router -->|Axios HTTP/REST| Auth & Dashboard & Sim & AI & KRX & Profile
+    Router -->|Axios HTTP/REST| Auth & Profile & Dashboard & Sim & AI
     Auth --> MySQL
+    Profile --> MySQL
     Dashboard --> MySQL
-    Sim --> yfinance & FDR & OilAPI
+    Sim --> yfinance & FDR
     AI --> ChromaDB & Ollama
     ChromaDB --> SBERT
-    KRX --> KRXMarket
-    Profile --> MySQL
 ```
 
 ---
@@ -115,16 +111,17 @@ graph TB
 ### 4.2 Compare Tab (경쟁사 비교 분석)
 <img width="1910" height="909" alt="image" src="https://github.com/user-attachments/assets/7c0253cc-6287-44b9-9e12-bf3f6d625938" />
 
-- **역할(Role)**: 동종 업계 기업 간 탄소 집약도 순위 및 격차를 시각화하여 경쟁 포지션 파악.
-- **의도(Purpose)**:
-  - **벤치마킹**: 매출 기반 또는 에너지 기반 탄소 집약도로 산업 내 순위 파악.
-  - **임계선 표시**: Top 10%(초록), 중앙값(회색), Bottom 10%(빨강) 3개 임계선으로 즉각적인 위치 판단.
-  - **상세 탐색**: Scope 1 or 2 or 1+2별 탄소집약도 및 에너지 집약도 세부 비교 가능
-  - **전략 연계**: 전략적 인사이트 섹션의 "세부 실행 계획" 버튼 클릭 시 **Simulator 탭**으로 즉시 이동.
-- **집약도 유형 전환**:
-  - **Revenue-based**: (Scope 1+2) / 매출 1억원 (tCO₂e/억원)
-  - **Energy-based**: 에너지 집약도 (TJ/억원)
-- **기술 요소**: Recharts(수평 바 차트), 동적 임계선 계산, `navigateTo('dashboard', 'simulator')` 연동.
+- **역할(Role)**: 동일 업종 기업의 탄소/에너지 집약도를 정렬하여 상대 포지션을 빠르게 파악.
+- **핵심 동작**:
+  - 집약도 모드 전환: `revenue`(탄소 집약도), `energy`(에너지 집약도)
+  - Scope 토글: S1/S2 반영 여부를 즉시 차트 계산에 반영
+  - 기준선 자동 계산: 상위 10% 및 중앙값 임계선 오버레이
+  - 카드 선택 연동: 선택 기업 강조 + 인사이트 내용 동기화
+  - 실행 연계: `세부 실행 계획` 버튼으로 Simulator 탭 이동
+- **기술 요소**:
+  - `CompareTab.tsx`: Recharts `BarChart`, `ReferenceLine`, 동적 색상 셀 렌더링
+  - 백엔드 연계: `POST /api/v1/dashboard/compare/insight`로 AI 인사이트 생성
+  - 네비게이션: `navigateTo('dashboard', 'simulator')`
 
 ---
 
@@ -132,26 +129,17 @@ graph TB
 <img width="1876" height="908" alt="image" src="https://github.com/user-attachments/assets/5985bb5e-05d7-4761-8ab2-3866a76dac70" />
 
 
-- **역할(Role)**: 글로벌 탄소 시장 동향 조회 및 K-ETS 기반 순 노출량 **산출·조달 전략 수립** 지원.
-- **의도(Purpose)**:
-  - **글로벌 가격 동향**: EU-ETS / K-ETS 가격 추이를 시간 범위(1개월/3개월/1년/전체) 별로 선택 조회.
-  - **순 노출량 산출**: 예상 배출량 − 무상 할당량 − 올해 감축 완료량 = **Net Exposure**
-  - **탄소 가격 시나리오**: 실시간 거래가 or 직접 입력 지원하여 탄소 가격이 폭등할 때 영업이익으로 버텨낼 수 있는 마지노선을 확인.
-  - **실시간 시뮬레이션**: 현재 예상 배출량 기준으로 배출량을 늘리거나 줄였을 때의 비용의 변동을 슬라이더로 조정 가능.
-- **4단계 시뮬레이션 흐름**:
-
-  | STEP | 명칭                  | 주요 내용                                                           |
-  |:----:|:--------------------- |:------------------------------------------------------------------- |
-  | 1    | 직접 탄소 배출량       | KPI 카드 (예상 배출량/순 노출량/예상 비용), 가격 시나리오·배출 변동·할당 정책·경매 상세 설정 |
-  | 2    | 전략 배분             | 컴플라이언스(배출권 구매) vs 감축시설 투자 비율 슬라이더              |
-  | 3    | 분할 매수 포트폴리오   | 결정된 배출권 목표 구매량을 위해, K-ETS 및 EU-ETS간 매수 비율로 복수의 트랜치를 만들어 모의 투자 |
-  | 4    | 시뮬레이션 결과 요약   | step 1~3을 거친 총 예상 탄소비용과 가용 탄소 예산(Budget) 대비 얼마의 비용을 줄일 수 있을지 표시          |
-
-
-- **조달 구성**:
-  - 무상 할당 (기준 배출량의 90%), 정부 경매 (시장가 대비 ~2.3% 절감), KRX 시장 구매
-  - 경매 참여 비중: 0~30% 슬라이더로 조절 가능
-- **기술 요소**: `market_data.py`에서 yfinance/FDR 시장 데이터 연동.
+- **역할(Role)**: 탄소 가격·배출량·할당량 변화에 따른 준수비용을 시뮬레이션하고 매수/감축 전략을 비교.
+- **핵심 동작**:
+  - 시장 데이터: EU-ETS/K-ETS 이력(`1m`, `3m`, `1y`, `all`) 조회
+  - 노출량 계산: 배출량, 할당 변화, 감축 옵션 적용 후 `Net Exposure` 산출
+  - 시나리오 입력: 가격 시나리오(`base/custom`), 할당 변화, 배출 변화(%)
+  - 전략 비교: 조달/감축 조합별 총비용 및 영향도 비교
+  - 트랜치 구성: K-ETS/EU-ETS 분할 매수 비율로 포트폴리오 테스트
+- **기술 요소**:
+  - 프론트: `SimulatorTab.tsx`, 상태 기반 즉시 재계산
+  - 백엔드: `GET /api/v1/sim/dashboard/market-trends`, `GET /api/v1/sim/dashboard/trend-combined`
+  - 데이터 소스: `market_data.py`에서 `yfinance + FinanceDataReader` 다중 fallback
 
 ---
 
@@ -184,11 +172,16 @@ graph TB
 
 ### 4.5 ChatBot (AI 전략 에이전트)
 
-- **역할(Role)**: ESG 공시 자료 기반 RAG 질의응답
-- **의도(Purpose)**:
-  - **지식 자동화**: 수백 페이지의 PDF 보고서에서 필요한 데이터를 즉시 추출하여 보고서 작성 시간 단축.
-  - **스트리밍 응답**: 실시간 토큰 출력으로 사용자 대기 시간 최소화.
-  - **문맥 유지**: 최근 8개 메시지를 LLM에 전달하여 대화 흐름 유지.
+- **역할(Role)**: ESG 문서 기반 질의응답 + 시장/전략 맥락형 답변 제공
+- **핵심 동작**:
+  - 스트리밍 응답: 토큰 단위 출력으로 체감 응답 지연 최소화
+  - 대화 문맥 유지: 이전 대화(history)와 선택 회사 컨텍스트 전달
+  - 리포트 스코프 제어: 최신/전체 보고서 범위 선택 가능
+  - 전략 보조: 별도 `strategy` 엔드포인트로 시뮬레이터 전략 문안 생성
+- **기술 요소**:
+  - API: `POST /api/v1/ai/chat` (StreamingResponse), `POST /api/v1/ai/strategy`, `POST /api/v1/ai/text-to-sql`
+  - RAG: ChromaDB 유사도 검색 + SBERT 임베딩
+  - LLM: Ollama(`qwen2.5:7b`) 연동
 - **RAG 파이프라인**:
 
   ```
@@ -198,7 +191,7 @@ graph TB
     → 실시간 토큰 응답 (fetch ReadableStream)
   ```
 
-- **기술 요소**: ChromaDB, Sentence-BERT (jhgan/ko-sroberta-multitask, 한국어 최적화), FastAPI StreamingResponse.
+- **기술 요소**: ChromaDB, Sentence-BERT, FastAPI StreamingResponse, 프론트 `ReadableStream` 처리.
 
 ---
 
@@ -211,13 +204,13 @@ graph TB
 - **인증 흐름**:
 
   ```
-  Signup → bcrypt(password) → User 저장(MySQL)
-  Login  → bcrypt 검증 → JWT 발급 (HS256, 24h 유효)
+  Signup → pbkdf2_sha256 해시 저장 → User 저장(MySQL)
+  Login  → 비밀번호 검증 → JWT 발급 (HS256, 기본 60분)
          → localStorage 저장 → WelcomePage 이동 (3초 자동)
   Refresh → token 존재 시 dashboard 자동 복원
   ```
 
-- **기술 요소**: bcrypt(비밀번호 해싱), JWT(python-jose), SQLAlchemy (User 모델).
+- **기술 요소**: passlib(pbkdf2_sha256), JWT(python-jose), SQLAlchemy (User 모델).
 
 ---
 
@@ -241,9 +234,9 @@ graph TB
 | **React**                         | 18      | 선언적 UI 및 컴포넌트 기반 아키텍처                               |
 | **TypeScript**                    | 5.2     | 강한 타입 체크로 대규모 시뮬레이션에서도 렌더링 안정성 확보         |
 | **Vite**                          | 5.1     | 빠른 HMR 및 최적화된 프로덕션 빌드                               |
-| **TailwindCSS**                   | 4.0     | 모던 디자인 시스템, 다크 모드/반응형 레이아웃 직관적 구현          |
+| **TailwindCSS**                   | 4.0     | 유틸리티 기반 스타일링 및 컴포넌트 UI 일관성 관리                  |
 | **Recharts**                      | 2.12    | 시계열 시장 데이터 및 비교 차트 (Line, Bar, Pie, Area)            |
-| **Axios**                         | 1.6.7   | REST API 통신 및 JWT 인터셉터                                    |
+| **Axios + Fetch**                 | -       | 일반 REST 통신 + 챗봇 스트리밍 응답 처리                          |
 | **Framer Motion**                 | -       | 페이지 전환 및 컴포넌트 애니메이션                               |
 | **Lucide React**                  | -       | 아이콘 라이브러리                                                |
 | **CVA (class-variance-authority)** | -      | 조건부 Tailwind 클래스 관리                                      |
@@ -252,22 +245,21 @@ graph TB
 
 | 기술                              | 용도                                                                         |
 |:--------------------------------- |:---------------------------------------------------------------------------- |
-| **FastAPI & Uvicorn**             | 비동기 처리로 시장 데이터 수집 및 AI 모델 추론 동시 요청 처리 성능 극대화      |
+| **FastAPI & Uvicorn**             | API 서버 및 비동기 요청 처리                                                  |
 | **SQLAlchemy & MySQL (PyMySQL)**  | 사용자/배출량 데이터 저장 및 ORM 트랜잭션 처리                               |
-| **yfinance**                      | 글로벌 탄소 선물(FCO2.FRK, CO2.L, FCO2.DE) 및 에너지 가격 데이터             |
-| **FinanceDataReader (pykrx)**     | 국내 K-ETS 배출권(KAU) 및 KOSPI/KOSDAQ 종목 데이터                          |
-| **Alpha Vantage**                 | EU-ETS 탄소 가격 보조 데이터 소스 (다중 fallback 설계)                       |
-| **passlib & bcrypt**              | 안전한 비밀번호 해싱 및 사용자 인증                                           |
+| **yfinance / yahoo_fin**          | EU-ETS 가격 데이터 조회 및 fallback                                           |
+| **FinanceDataReader**             | K-ETS(KAU) 시계열 데이터 조회                                                |
+| **passlib + python-jose**         | 비밀번호 해싱(`pbkdf2_sha256`) 및 JWT 인증                                   |
 | **python-jose**                   | JWT 토큰 생성 및 검증 (HS256)                                                |
 
 ### 5.3 AI & NLP
 
 | 기술                              | 용도                                                                         |
 |:--------------------------------- |:---------------------------------------------------------------------------- |
-| **Ollama (qwen2.5:7b)**           | 로컬 LLM 추론 (클라우드 API 없이 온프레미스 동작)                             |
-| **ChromaDB**                      | PDF에서 추출된 텍스트 임베딩 저장 및 코사인 유사도 기반 시맨틱 검색            |
-| **Sentence-Transformers**         | 한국어 문맥 이해에 최적화된 `jhgan/ko-sroberta-multitask` 모델 사용           |
-| **Docling & PyMuPDF**             | 복잡한 표와 구조를 포함한 ESG 보고서 PDF를 파이토닉 데이터로 변환             |
+| **Ollama (qwen2.5:7b)**           | 챗봇/전략 생성 로컬 추론 엔진                                                  |
+| **ChromaDB**                      | RAG 벡터 저장소 (로컬 Persistent 또는 원격 HTTP 서버)                          |
+| **Sentence-Transformers**         | 임베딩 모델 (`BAAI/bge-m3`)                                                    |
+| **Docling & PyMuPDF**             | PDF 구조 추출 및 벡터화 전처리                                                 |
 
 ---
 
@@ -275,126 +267,81 @@ graph TB
 
 ```plaintext
 ESG_Dashboard/
-├── requirements.txt              # 공통 Python 의존성
-├── .env                          # 환경 변수 (API 키, DB 접속 정보 등)
-├── .gitignore
-├── 페이지_라우팅_구조.md         # 페이지 라우팅 상세 설계서 (Korean)
-├── start.sh                      # 서버 시작 스크립트
-│
-├── backend/                      # FastAPI 기반 백엔드
-│   ├── app/
-│   │   ├── routers/              # API 엔드포인트 라우터
-│   │   │   ├── auth.py           #   POST /auth/signup, /auth/login
-│   │   │   ├── dashboard.py      #   GET /api/v1/dashboard/companies, /benchmarks
-│   │   │   ├── simulator.py      #   GET /api/v1/sim/market-trends, /oil-prices
-│   │   │   ├── ai.py             #   POST /api/v1/ai/chat, /strategy, /text-to-sql
-│   │   │   ├── krx.py            #   GET /api/v1/krx/kospi, /kosdaq, /stock/{ticker}
-│   │   │   └── profile.py        #   PUT/DELETE /api/v1/profile
-│   │   ├── services/             # 비즈니스 로직
-│   │   │   ├── market_data.py    #   EU-ETS / K-ETS 데이터 수집 (4중 fallback)
-│   │   │   ├── ai_service.py     #   RAG 검색, Ollama LLM 스트리밍
-│   │   │   ├── krx_service.py    #   KRX API 연동 (pykrx)
-│   │   │   ├── oil_price.py      #   WTI / Brent 유가 데이터
-│   │   │   ├── eex_scraper.py    #   EEX 탄소 가격 스크래핑
-│   │   │   ├── emission_extractor.py # PDF → 데이터 추출 파이프라인
-│   │   │   └── extractors/       #   추출 방법별 전략 패턴
-│   │   │       ├── base.py       #     공통 유틸리티 함수들 
-│   │   │       ├── regex.py      #     정규식 기반 추출
-│   │   │       ├── gpt_text.py   #     GPT 텍스트 추출
-│   │   │       ├── gpt_vision.py #     GPT Vision (표 OCR)
-│   │   │       └── auto_pipeline.py #  자동 fallback 파이프라인
-│   │   ├── models.py             # SQLAlchemy ORM (User, DashboardEmission)
-│   │   ├── database.py           # DB 연결 설정
-│   │   ├── config.py             # 환경 변수 및 설정 관리
-│   │   ├── schemas.py            # Pydantic 요청/응답 모델
-│   │   ├── main.py               # FastAPI 앱 + 라우터 등록 + CORS 설정
-│   │   ├── init_db.py            # DB 초기화 및 시드 데이터
-│   │   └── static/               # 정적 파일 (프로필 이미지 등)
-│   ├── main.py                   # 메인 진입점 (PDF_Extraction 통합)
-│   ├── requirements.txt          # Backend 전용 Python 의존성
-│   ├── test_api.py               # API 테스트 스크립트
-│  
-│
-├── frontend/                     # React 기반 프론트엔드
-│   ├── src/
-│   │   ├── features/             # 기능별 모듈 (한글명 폴더 구조)
-│   │   │   ├── auth/             #   Login, Signup, WelcomePage
-│   │   │   ├── profile/          #   Profile 설정 페이지
-│   │   │   ├── 대시보드/          #   Dashboard 탭
-│   │   │   │   └── components/   #     KPICards, EmissionPieChart, TrendChart
-│   │   │   ├── 경쟁사비교/        #   Compare 탭 (경쟁사 분석)
-│   │   │   ├── 시뮬레이터/        #   Simulator 탭 (K-ETS 비용 시뮬레이션)
-│   │   │   ├── 목표설정/          #   Target 탭 (SBTi 목표 관리)
-│   │   │   ├── 챗봇/             #   ChatBot (AI RAG 챗봇)
-│   │   │   ├── data-input/       #   데이터 입력 폼
-│   │   │   ├── reports/          #   ESG 리포트 뷰어
-│   │   │   └── analytics/        #   분석 페이지
-│   │   ├── services/             # API 통신 모듈
-│   │   │   ├── api.ts            #   MarketService, AiService
-│   │   │   ├── authApi.ts        #   인증 API (login, signup, token)
-│   │   │   └── profileApi.ts     #   프로필 API
-│   │   ├── components/           # 공용 UI 컴포넌트
-│   │   │   ├── layout/           #   Header, Layout
-│   │   │   └── ui/               #   Button, Card, Tooltip, Badge
-│   │   ├── data/
-│   │   │   └── mockData.ts       #   Mock 데이터 및 가격 시나리오
-│   │   ├── types/
-│   │   │   └── index.ts          #   TypeScript 타입 (ViewType, TabType 등)
-│   │   ├── App.tsx               # 메인 앱 (전역 상태 & 네비게이션)
-│   │   ├── main.tsx              # React 진입점
-│   │   └── index.css             # 전역 스타일
-│   ├── index.html
-│   ├── vite.config.ts            # Vite 빌드 설정
-│   ├── package.json              # Node.js 의존성 목록
-│   └── tsconfig.json             # TypeScript 설정
-│
-├── PDF_Extraction/               # PDF 처리 및 벡터 DB 구축
-│   ├── src/
-│   │   ├── pdf_text_extractor.py #   자동 PDF 인코딩 보정 -> 텍스트 인코딩 깨진 PDF 감지하여 재구축
-│   │   ├── structured_extract.py #   문서를 페이지별 Markdown, 표 (JSON), 그림(Image)로 구조화
-│   │   ├── figure_ocr.py         #   표 데이터 추출  by PyMuPDF (or rapidOCR)
-│   │   ├── structured_extract.py #   문서를 페이지별 Markdown, 표 (JSON), 그림(Image)로 구조화
-│   │   ├── table_diff.py         #   표 숫자 검증
-│   │   ├── load_to_db.py         #   데이터 베이스 적재
-│   │   ├── build_vector_db.py    #   벡터 데이터베이스 구축
-│   │   └── search_vector_db.py   #   벡터 검색 테스트
-│   │   └── run_pipeline.py       #   PDF_Extraction 폴더 전체 실행 파일
-│   ├── data/                     #   입력 PDF 파일 (ESG 보고서)
-│   ├── docs/                     #   RAG 관련 문서 저장소
-│   ├── prompts/                  #   AI 프롬프트 저장소
-│   ├── vector_db/                #   로컬 ChromaDB 저장소 (RAG 지식 베이스)
-│   └── requirements.txt          #   PDF 전용 Python 의존성
-│
-└── evaluation/                   #   AI 모델 성능 평가(LLM 모델 성능 비교)
-    └── evaluate_models.py        #   RAG 정확도 및 모델 성능 측정
+├── requirements.txt                  # 공통 Python 의존성 (backend/PDF 공용)
+├── README.md
+├── 페이지_라우팅_구조.md
+├── start_all.sh                      # 로컬 동시 실행 스크립트
+├── backend/
+│   ├── requirements.txt              # 백엔드 전용 의존성
+│   ├── main.py                       # 통합 엔트리포인트 (RAG 보조 엔드포인트 포함)
+│   ├── debug_api.py
+│   └── app/
+│       ├── main.py                   # 코어 API 서버 엔트리포인트
+│       ├── config.py                 # .env 기반 설정 로더
+│       ├── database.py
+│       ├── models.py                 # User, DashboardEmission
+│       ├── schemas.py
+│       ├── init_db.py
+│       ├── routers/                  # auth/profile/dashboard/simulator/ai
+│       ├── services/                 # ai_service, market_data 등
+│       └── static/profile/           # 업로드된 프로필 이미지
+├── frontend/
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── vite.config.ts
+│   └── src/
+│       ├── App.tsx                   # view/tab 상태 라우팅 중심
+│       ├── config.ts                 # API base URL 구성
+│       ├── services/                 # auth/profile/market/ai API 호출
+│       ├── features/                 # 탭/페이지별 UI
+│       └── types/
+├── PDF_Extraction/
+│   ├── requirements.txt              # PDF/RAG 파이프라인 의존성
+│   ├── src/                          # 추출/적재/벡터DB 구축 스크립트
+│   ├── docs/
+│   └── vector_db/                    # (선택) 로컬 Chroma Persistent 저장 경로
+└── evaluation/
+    └── evaluate_models.py
 ```
+
+> [!NOTE]
+> `PDF_Extraction/vector_db/`는 로컬 Persistent Chroma를 쓸 때의 기본 경로입니다.
+> 원격 Chroma 서버(`CHROMA_HOST`, `CHROMA_PORT`)를 쓰면 이 폴더가 없어도 챗봇이 동작합니다.
 
 ---
 
 ## 🗺️ 7. 페이지 라우팅 구조 (Page Routing)
 
-> React Router 미사용 — `view` state 기반 조건부 렌더링 방식
+> React Router 미사용, `App.tsx`의 `view`/`activeTab` 상태 + `history.pushState` 기반
 > 상세 설계서: [`페이지_라우팅_구조.md`](페이지_라우팅_구조.md)
 
-### 7.1 View 라우팅 (최상위 화면 전환)
+### 7.1 View 라우팅 (최상위)
 
-| `view` 값     | 컴포넌트          | 설명                            |
-|:------------- |:----------------- |:------------------------------- |
-| `login`       | `<Login>`         | 로그인 화면 (기본값)             |
-| `signup`      | `<Signup>`        | 회원가입 화면                    |
-| `welcome`     | `<WelcomePage>`   | 환영 페이지 (3초 후 자동 이동)   |
-| `dashboard`   | 탭 대시보드       | 메인 대시보드 (4개 탭)           |
-| `profile`     | `<Profile>`       | 프로필 설정                      |
+| `view` 값     | 화면 컴포넌트       | 설명 |
+|:------------- |:------------------- |:---- |
+| `login`       | `<Login>`           | 로그인 |
+| `signup`      | `<Signup>`          | 회원가입 |
+| `welcome`     | `<WelcomePage>`     | 로그인 직후 환영 화면 |
+| `dashboard`   | 탭 컨테이너         | 메인 업무 화면 |
+| `profile`     | `<Profile>`         | 프로필 설정 |
+| `data-input`  | `<DataInput>`       | 데이터 입력 |
+| `reports`     | `<Reports>`         | 리포트 |
+| `analytics`   | `<Analytics>`       | 분석 화면 |
 
-### 7.2 Tab 라우팅 (`view === 'dashboard'` 내부)
+### 7.2 Tab 라우팅 (`view === 'dashboard'`)
 
-| `activeTab`  | 컴포넌트           | 설명                              |
-|:------------ |:------------------ |:--------------------------------- |
-| `dashboard`  | `<DashboardTab>`   | 배출량 현황 + KPI 카드 4개         |
-| `compare`    | `<CompareTab>`     | 경쟁사 비교 분석                   |
-| `simulator`  | `<SimulatorTab>`   | K-ETS 준수 비용 시뮬레이터         |
-| `target`     | `<TargetTab>`      | SBTi 목표 관리 + 예측              |
+| `activeTab` | 화면 컴포넌트      | 설명 |
+|:----------- |:------------------ |:---- |
+| `dashboard` | `<DashboardTab>`   | 배출량/KPI 요약 |
+| `compare`   | `<CompareTab>`     | 경쟁사 집약도 비교 |
+| `simulator` | `<SimulatorTab>`   | 시장 가격/비용 시뮬레이션 |
+| `target`    | `<TargetTab>`      | SBTi 목표 및 달성도 |
 
+### 7.3 라우팅 동작 방식
+
+- `navigateTo(view, tab)` 호출 시 상태 갱신 + `window.history.pushState`
+- 새로고침/재접속 시 `localStorage(view, activeTab)` 값으로 복원
+- 브라우저 뒤로가기/앞으로가기는 `popstate` 이벤트로 복원
 
 ---
 
@@ -402,53 +349,34 @@ ESG_Dashboard/
 
 ### 8.0 사전 요구사항 (Prerequisites)
 
-| 소프트웨어   | 최소 버전 | 용도                                 |
+| 소프트웨어   | 권장 버전 | 용도                                 |
 |:----------- |:-------- |:------------------------------------ |
-| Python       | 3.10+    | 백엔드 서버 및 AI 모델               |
+| Python       | 3.11.x   | 백엔드 서버 및 PDF/RAG 파이프라인     |
 | Node.js      | 18+      | 프론트엔드 빌드                      |
 | MySQL        | 5.7+     | 사용자 및 배출량 데이터 저장          |
-| Ollama       | 최신     | 로컬 LLM (qwen2.5:7b) 실행           |
+| Ollama       | 최신     | 로컬 LLM (선택)                      |
 
 ### 8.1 백엔드 가동
 
 ```bash
-cd backend
-python -m venv .venv
+# 프로젝트 루트 기준
+python3.11 -m venv .venv
+source .venv/bin/activate
 
-# Windows:
-.venv\Scripts\activate
-# macOS / Linux:
-# source .venv/bin/activate
-
-pip install -r ../requirements.txt
 pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
 # DB 초기화 (최초 1회)
+cd backend/app
 python init_db.py
+cd ../..
+
+# 서버 실행 (권장: app 엔트리포인트)
+cd backend
+uvicorn app.main:app --reload --port 8000
 ```
 
-**백엔드 서버 실행 (2가지 방법)**:
-
-#### 방법 1: 앱 서버 실행 (권장 — 대시보드, 시뮬레이터, AI, KRX)
-
-```bash
-# backend/app/main.py 사용
-cd app
-uvicorn main:app --reload --port 8000
-```
-
-#### 방법 2: 메인 서버 실행 (PDF_Extraction 통합)
-
-```bash
-# backend/main.py 사용 — PDF 문서 검색 및 RAG 기능 포함
-python main.py
-# 또는
-uvicorn main:app --reload --port 8000
-```
-
-> [!NOTE]
-> - `backend/app/main.py`: 시장 시뮬레이션, 대시보드, KRX 데이터, AI 전략, 인증, 프로필 API 포함
-> - `backend/main.py`: PDF 검색, RAG 챗봇, 문서 관리 기능 추가 통합
+> `backend/main.py`는 PDF 검색/통계 보조 엔드포인트까지 함께 쓰는 통합 모드입니다.
 
 ### 8.2 프론트엔드 가동
 
@@ -460,37 +388,38 @@ npm run dev
 
 브라우저에서 `http://localhost:5173` 접속
 
-### 8.3 AI 및 RAG 환경 설정 (선택사항)
+### 8.3 AI/RAG 설정
 
-RAG 챗봇 기능을 사용하려면 다음 설정이 필요합니다:
+#### 옵션 A: 원격 Chroma 서버 사용 (운영 권장)
 
-#### Ollama 설치 및 모델 다운로드
-
-```bash
-# Ollama 설치: https://ollama.ai
-# 설치 후 모델 다운로드
-ollama pull qwen2.5:7b
+```env
+CHROMA_HOST=your-chroma-host
+CHROMA_PORT=8000
 ```
 
-#### 벡터 DB 구축
+- 이 경우 로컬 `PDF_Extraction/vector_db` 폴더가 없어도 됩니다.
+- 챗봇은 원격 컬렉션(`esg_chunks`, `esg_pages` 또는 `esg_documents`)을 조회합니다.
+
+#### 옵션 B: 로컬 Persistent Chroma 사용 (개발용)
 
 ```bash
+pip install -r PDF_Extraction/requirements.txt
 cd PDF_Extraction
-
-# 의존성 설치 (최초 1회)
-pip install -r ../requirements.txt
-
-# PDF 파일을 data/ 폴더에 배치 후 벡터 DB 구축
 python src/build_vector_db.py
 ```
 
-> [!IMPORTANT]
-> ChromaDB는 `PDF_Extraction/vector_db/` 경로에 저장됩니다.
-> 이 폴더가 없으면 RAG 기반 챗봇 기능이 작동하지 않습니다.
+- 기본 로컬 경로는 `PDF_Extraction/vector_db`입니다.
+- 벡터DB가 없으면 챗봇 API는 실행되지만 RAG 근거 검색 품질이 떨어질 수 있습니다.
+
+#### Ollama 모델 준비 (선택)
+
+```bash
+ollama pull qwen2.5:7b
+```
 
 ### 8.4 환경 변수 설정
 
-프로젝트 루트에 `.env` 파일 생성:
+프로젝트 루트 `.env` 예시:
 
 ```env
 # --- Database (MySQL) ---
@@ -500,25 +429,26 @@ DB_USER=root
 DB_PASSWORD=your_password
 DB_NAME=esg
 
-# --- Frontend API Base URL ---
+# --- Frontend API URL ---
 VITE_API_BASE_URL=http://127.0.0.1:8000
+# (호환용 fallback) VITE_API_URL=http://127.0.0.1:8000
 
-# --- JWT Secret ---
+# --- JWT ---
 JWT_SECRET_KEY=your_jwt_secret_key_here
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
 
-# --- Ollama (Local LLM) ---
+# --- RAG/LLM ---
 OLLAMA_API_URL=http://localhost:11434
+VECTOR_DB_PATH=/absolute/path/to/vector_db   # 선택
+CHROMA_HOST=                                  # 원격 사용 시 설정
+CHROMA_PORT=8000
 
-# --- Vector DB (ChromaDB) ---
-CHROMA_HOST=localhost
-CHROMA_PORT=3214
+# --- Market Data ---
+Alpha_Vantage_API=your_alpha_vantage_key
+USE_MOCK_DATA=true
 
-# --- External Market Data APIs ---
-Alpha_Vantage_API=your_alpha_vantage_key   # EU-ETS 탄소 가격
-KRX_api=your_krx_api_key                   # 한국거래소 데이터
-Oil_Price_API=your_oil_price_api_key       # WTI / Brent 유가
-
-# --- AI (OpenAI, HuggingFace - 선택사항) ---
+# --- Optional ---
 OPENAI_API_KEY=sk-...
 HF_TOKEN=hf_...
 ```
@@ -531,118 +461,54 @@ HF_TOKEN=hf_...
 
 ### 9.1 인증 API (`/auth`)
 
-| 엔드포인트      | 메서드 | 요청 Body                        | 설명                     |
-|:--------------- |:------ |:-------------------------------- |:------------------------ |
-| `/auth/signup`  | POST   | `{ email, password }`            | 회원가입                  |
-| `/auth/login`   | POST   | `{ email, password }`            | 로그인 → JWT 반환         |
+| 엔드포인트 | 메서드 | 설명 |
+|:---------- |:------ |:---- |
+| `/auth/signup` | POST | 회원가입 |
+| `/auth/login`  | POST | 로그인(JWT access token 발급) |
+| `/auth/me`     | GET  | 현재 사용자 조회 (`Authorization: Bearer <token>`) |
 
-### 9.2 대시보드 API (`/api/v1/dashboard`)
+### 9.2 프로필 API (`/profile`)
 
-| 엔드포인트                    | 메서드 | 파라미터        | 설명                                          |
-|:----------------------------- |:------ |:--------------- |:--------------------------------------------- |
-| `/api/v1/dashboard/companies` | GET    | -               | 전체 기업 배출량 목록 (history 배열 포함)      |
-| `/api/v1/dashboard/benchmarks`| GET    | `company_id`    | 업계 벤치마크 임계선 (Top10%, 중앙값, Bottom10%) |
+| 엔드포인트 | 메서드 | 설명 |
+|:---------- |:------ |:---- |
+| `/profile/me` | GET | 프로필 조회 |
+| `/profile/me` | PUT | 프로필 수정 (`nickname`, `company_name`, `classification`, `bio`) |
+| `/profile/me/password` | POST | 비밀번호 변경 |
+| `/profile/me/email` | POST | 이메일 변경 |
+| `/profile/me/delete` | POST | 계정 삭제 |
+| `/profile/me/avatar` | POST | 아바타 이미지 업로드(`multipart/form-data`) |
 
+### 9.3 대시보드 API (`/api/v1/dashboard`)
 
+| 엔드포인트 | 메서드 | 설명 |
+|:---------- |:------ |:---- |
+| `/api/v1/dashboard/companies` | GET | 기업별 최신/연도별 배출 데이터 목록 |
+| `/api/v1/dashboard/compare/insight` | POST | Compare 탭 AI 인사이트 생성 |
 
-**응답 예시** (`/companies` 단일 항목):
+### 9.4 시뮬레이터 API (`/api/v1/sim`)
 
-```json
-{
-  "id": 1,
-  "name": "현대건설",
-  "s1": 75000,
-  "s2": 45000,
-  "s3": 130684,
-  "revenue": 500000000000,
-  "baseEmissions": 250684,
-  "carbon_intensity_scope1": 15.0,
-  "carbon_intensity_scope2": 9.0,
-  "carbon_intensity_scope3": 26.1,
-  "history": [
-    { "year": 2021, "s1": 80000, "s2": 48000, "s3": 140000 },
-    { "year": 2022, "s1": 77000, "s2": 46000, "s3": 135000 }
-  ]
-}
-```
+| 엔드포인트 | 메서드 | 주요 파라미터 | 설명 |
+|:---------- |:------ |:------------- |:---- |
+| `/api/v1/sim/dashboard/market-trends` | GET | `period=1m|3m|1y|all` | EU-ETS/K-ETS 가격 이력 |
+| `/api/v1/sim/dashboard/trend-combined` | GET | `company`, `period`, `start_year`, `end_year` | 리스크 비용 추이 계산 |
 
-### 9.3 시뮬레이터 API (`/api/v1/sim`)
+### 9.5 AI API (`/api/v1/ai`)
 
-| 엔드포인트                         | 메서드 | 파라미터                         | 설명                                               |
-|:----------------------------------- |:------ |:-------------------------------- |:-------------------------------------------------- |
-| `/api/v1/sim/dashboard/market-trends` | GET  | `period` (1m/3m/1y/all)          | EU-ETS / K-ETS 전체 이력 데이터 (프론트에서 1개월/3개월/1년/전체 필터링) |
-| `/api/v1/sim/market/oil-prices`      | GET   | -                                | WTI / Brent 유가 정보                             |
-| `/api/v1/sim/dashboard/trend-combined` | GET | `company`, `period`              | 기업별 탄소 리스크 비용 시뮬레이션                 |
+| 엔드포인트 | 메서드 | 설명 |
+|:---------- |:------ |:---- |
+| `/api/v1/ai/chat` | POST | RAG 기반 스트리밍 챗봇 |
+| `/api/v1/ai/strategy` | POST | 시장 데이터 기반 전략 생성 |
+| `/api/v1/ai/text-to-sql` | POST | 자연어 질의 SQL 변환 |
 
-**응답 예시** (`/market-trends`):
+### 9.6 통합 엔트리포인트 전용 API (`backend/main.py`)
 
-```json
-{
-  "chart_data": [
-    { "date": "2024-01-15", "krPrice": 14200, "euPrice": 62.3, "type": "actual" },
-    { "date": "2024-01-16", "krPrice": 14350, "euPrice": 63.1, "type": "actual" }
-  ]
-}
-```
-
-### 9.4 AI 전략 API (`/api/v1/ai`)
-
-| 엔드포인트             | 메서드 | 설명                                                      |
-|:---------------------- |:------ |:--------------------------------------------------------- |
-| `/api/v1/ai/chat`      | POST   | ESG 문서 기반 RAG 챗봇 (스트리밍 응답)                   |
-| `/api/v1/ai/strategy`  | POST   | 시장 동향 분석 기반 최적 탄소 배출권 조달 전략 생성        |
-| `/api/v1/ai/text-to-sql` | POST | 자연어를 SQL 쿼리로 자동 변환                             |
-
-**Request Body** (`/chat`):
-
-```json
-{
-  "message": "탄소 배출량 감축 목표를 알려줘",
-  "history": [
-    { "role": "user", "content": "이전 질문" },
-    { "role": "assistant", "content": "이전 답변" }
-  ],
-  "companyName": "현대건설",
-  "reportScope": "all",
-  "reportYear": "2023"
-}
-```
-
-**Request Body** (`/strategy`):
-
-```json
-{
-  "companyId": 1,
-  "market": "K-ETS",
-  "currentPrice": 15200
-}
-```
-
-### 9.5 한국거래소 데이터 API (`/api/v1/krx`)
-
-| 엔드포인트              | 메서드 | 파라미터                              | 설명                              |
-|:----------------------- |:------ |:------------------------------------- |:--------------------------------- |
-| `/api/v1/krx/kospi`     | GET    | `date` (YYYYMMDD, 선택)               | KOSPI 지수 시세 조회              |
-| `/api/v1/krx/kosdaq`    | GET    | `date` (YYYYMMDD, 선택)               | KOSDAQ 지수 시세 조회             |
-| `/api/v1/krx/stocks`    | GET    | `market` (ALL/KOSPI/KOSDAQ)           | 상장 종목 목록 (상위 50개)        |
-| `/api/v1/krx/stock/{ticker}` | GET | `ticker` (예: 005930)               | 특정 종목 시세 조회               |
-
-### 9.6 프로필 API (`/api/v1/profile`)
-
-| 엔드포인트              | 메서드 | 설명                                                 |
-|:----------------------- |:------ |:--------------------------------------------------- |
-| `/api/v1/profile`       | PUT    | 프로필 정보 수정 (닉네임, 분류, 자기소개, 이미지)     |
-| `/api/v1/profile`       | DELETE | 계정 삭제 (탈퇴)                                     |
-
-### 9.7 추가 엔드포인트 (`backend/main.py`)
-
-| 엔드포인트         | 메서드 | 설명                                              |
-|:------------------ |:------ |:----------------------------------------------- |
-| `/`                | GET    | API 서버 상태 확인                               |
-| `/api/health`      | GET    | API 헬스 체크                                    |
-| `/api/search`      | GET    | ESG 문서 벡터 검색 (ChromaDB, `q` 파라미터)      |
-| `/api/companies`   | GET    | 데이터베이스 내 기업 목록 조회                    |
-| `/api/stats`       | GET    | 데이터베이스 통계 (총 청크 수, 기업 수 등)        |
+| 엔드포인트 | 메서드 | 설명 |
+|:---------- |:------ |:---- |
+| `/` | GET | 서버 상태 |
+| `/api/health` | GET | 헬스체크 |
+| `/api/search` | GET | 벡터 검색 |
+| `/api/companies` | GET | 벡터 DB 기준 기업 목록 |
+| `/api/stats` | GET | 벡터 DB 통계 |
 
 ---
 
@@ -663,37 +529,45 @@ HF_TOKEN=hf_...
 
 ### `users`
 
-| 컬럼명              | 타입         | 설명                         |
-|:------------------- |:------------ |:---------------------------- |
-| `id`                | INT (PK)     | 사용자 ID                    |
-| `email`             | VARCHAR (UQ) | 이메일 (로그인 식별자)        |
-| `company_name`      | VARCHAR      | 소속 기업명                  |
-| `hashed_password`   | VARCHAR      | bcrypt 해시 비밀번호          |
-| `nickname`          | VARCHAR      | 닉네임                       |
-| `classification`    | VARCHAR      | 멸종위기종 분류 테마          |
-| `bio`               | TEXT         | 자기소개 (최대 500자)        |
-| `profile_image_url` | VARCHAR      | 프로필 이미지 경로            |
-| `created_at`        | DATETIME     | 가입일시                     |
+| 컬럼명 | 타입 | 설명 |
+|:------ |:---- |:---- |
+| `id` | INT (PK) | 사용자 ID |
+| `email` | VARCHAR(255) UNIQUE | 로그인 식별자 |
+| `company_name` | VARCHAR(255) | 소속 기업명 |
+| `hashed_password` | VARCHAR(255) | 해시된 비밀번호 |
+| `nickname` | VARCHAR(100) | 표시 이름 |
+| `classification` | VARCHAR(50) | 분류 테마 |
+| `bio` | VARCHAR(500) | 자기소개 |
+| `profile_image_url` | VARCHAR(500) NULL | 프로필 이미지 경로 |
+| `role` | VARCHAR(20) | 사용자 권한 문자열 |
+| `is_admin` | BOOLEAN | 관리자 여부 |
+| `created_at` | DATETIME | 생성 시각 |
+| `updated_at` | DATETIME | 수정 시각 |
 
 ### `dashboard_emissions`
 
-| 컬럼명                        | 타입     | 설명                           |
-|:----------------------------- |:-------- |:------------------------------ |
-| `id`                          | INT (PK) | 레코드 ID                      |
-| `company_id`                  | INT      | 기업 ID                        |
-| `company_name`                | VARCHAR  | 기업명                         |
-| `year`                        | INT      | 데이터 기준 연도               |
-| `scope1`, `scope2`, `scope3`  | FLOAT    | Scope별 배출량 (tCO₂e)        |
-| `allowance`                   | FLOAT    | 무상 할당량 (tCO₂e)           |
-| `revenue`                     | FLOAT    | 매출액 (원)                    |
-| `carbon_intensity_scope1`     | FLOAT    | Scope 1 탄소 집약도 (tCO₂e/억원) |
-| `carbon_intensity_scope2`     | FLOAT    | Scope 2 탄소 집약도 (tCO₂e/억원) |
-| `carbon_intensity_scope3`     | FLOAT    | Scope 3 탄소 집약도 (tCO₂e/억원) |
-| `energy_intensity`            | FLOAT    | 에너지 집약도 (TJ/억원)        |
-| `base_year`                   | INT      | SBTi 기준 연도                 |
-| `base_emissions`              | FLOAT    | 기준 연도 총 배출량            |
-| `data_source`                 | VARCHAR  | 데이터 출처 (PDF명 등)         |
-| `is_verified`                 | BOOLEAN  | 검증 여부                      |
+| 컬럼명 | 타입 | 설명 |
+|:------ |:---- |:---- |
+| `id` | INT (PK) | 레코드 ID |
+| `company_id` | INT INDEX | 기업 식별자 |
+| `company_name` | VARCHAR(100) INDEX | 기업명 |
+| `year` | INT INDEX | 연도 |
+| `scope1` `scope2` `scope3` | FLOAT | Scope별 배출량 |
+| `allowance` | FLOAT NULL | 무상 할당량 |
+| `revenue` | BIGINT | 매출 |
+| `energy_intensity` | FLOAT | 에너지 집약도 |
+| `carbon_intensity` | FLOAT | (S1+S2) 탄소 집약도 |
+| `carbon_intensity_scope1` | FLOAT | Scope1 집약도 |
+| `carbon_intensity_scope2` | FLOAT | Scope2 집약도 |
+| `carbon_intensity_scope3` | FLOAT | Scope3 집약도 |
+| `base_year` | INT | 기준 연도 |
+| `base_emissions` | FLOAT | 기준 배출량 |
+| `source_doc_id` | INT | 원본 문서 ID |
+| `data_source` | VARCHAR(500) | 데이터 출처 |
+| `extraction_method` | VARCHAR(50) | 추출 방식 |
+| `is_verified` | BOOLEAN | 검증 여부 |
+| `created_at` | DATETIME | 생성 시각 |
+| `updated_at` | DATETIME | 수정 시각 |
 
 ---
 
