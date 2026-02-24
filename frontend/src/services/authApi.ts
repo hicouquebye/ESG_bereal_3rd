@@ -32,17 +32,32 @@ const parseApiError = async (response: Response, fallback: string): Promise<stri
     }
 };
 
+const FETCH_TIMEOUT_MS = 10000;
+
+const fetchWithTimeout = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+        return await fetch(input, { ...init, signal: controller.signal });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+};
+
 export const signup = async (data: SignupData): Promise<UserResponse> => {
     let response: Response;
     try {
-        response = await fetch(`${API_BASE_URL}/auth/signup`, {
+        response = await fetchWithTimeout(`${API_BASE_URL}/auth/signup`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(data),
         });
-    } catch {
+    } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+            throw new Error(`요청 시간이 초과되었습니다. 백엔드 상태를 확인해주세요. (${API_BASE_URL})`);
+        }
         throw new Error(`백엔드 서버에 연결할 수 없습니다. (${API_BASE_URL})`);
     }
 
@@ -56,14 +71,17 @@ export const signup = async (data: SignupData): Promise<UserResponse> => {
 export const login = async (data: LoginData): Promise<TokenResponse> => {
     let response: Response;
     try {
-        response = await fetch(`${API_BASE_URL}/auth/login`, {
+        response = await fetchWithTimeout(`${API_BASE_URL}/auth/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(data),
         });
-    } catch {
+    } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+            throw new Error(`요청 시간이 초과되었습니다. 백엔드 상태를 확인해주세요. (${API_BASE_URL})`);
+        }
         throw new Error(`백엔드 서버에 연결할 수 없습니다. (${API_BASE_URL})`);
     }
 
@@ -77,13 +95,16 @@ export const login = async (data: LoginData): Promise<TokenResponse> => {
 export const getCurrentUser = async (token: string): Promise<UserResponse> => {
     let response: Response;
     try {
-        response = await fetch(`${API_BASE_URL}/auth/me`, {
+        response = await fetchWithTimeout(`${API_BASE_URL}/auth/me`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
             },
         });
-    } catch {
+    } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+            throw new Error(`요청 시간이 초과되었습니다. 백엔드 상태를 확인해주세요. (${API_BASE_URL})`);
+        }
         throw new Error(`백엔드 서버에 연결할 수 없습니다. (${API_BASE_URL})`);
     }
 
