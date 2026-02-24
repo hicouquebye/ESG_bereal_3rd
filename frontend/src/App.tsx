@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type {
   TabType, MarketType, IntensityType, TimeRangeType,
   TrendData, Tranche, ChatMessage, CompanyConfig,
@@ -76,6 +77,36 @@ const tabs = [
   { id: 'target' as TabType, label: 'Targets' },
 ];
 
+type ViewType = 'login' | 'signup' | 'welcome' | 'dashboard' | 'profile' | 'data-input' | 'reports' | 'analytics';
+
+const resolveRoute = (pathname: string): { view: ViewType; tab: TabType } => {
+  if (pathname === '/login') return { view: 'login', tab: 'dashboard' };
+  if (pathname === '/signup') return { view: 'signup', tab: 'dashboard' };
+  if (pathname === '/welcome') return { view: 'welcome', tab: 'dashboard' };
+  if (pathname === '/profile') return { view: 'profile', tab: 'dashboard' };
+  if (pathname === '/data-input') return { view: 'data-input', tab: 'dashboard' };
+  if (pathname === '/reports') return { view: 'reports', tab: 'dashboard' };
+  if (pathname === '/analytics') return { view: 'analytics', tab: 'dashboard' };
+  if (pathname === '/dashboard/compare') return { view: 'dashboard', tab: 'compare' };
+  if (pathname === '/dashboard/simulator') return { view: 'dashboard', tab: 'simulator' };
+  if (pathname === '/dashboard/target') return { view: 'dashboard', tab: 'target' };
+  return { view: 'dashboard', tab: 'dashboard' };
+};
+
+const buildPath = (view: ViewType, tab: TabType): string => {
+  if (view === 'login') return '/login';
+  if (view === 'signup') return '/signup';
+  if (view === 'welcome') return '/welcome';
+  if (view === 'profile') return '/profile';
+  if (view === 'data-input') return '/data-input';
+  if (view === 'reports') return '/reports';
+  if (view === 'analytics') return '/analytics';
+  if (tab === 'compare') return '/dashboard/compare';
+  if (tab === 'simulator') return '/dashboard/simulator';
+  if (tab === 'target') return '/dashboard/target';
+  return '/dashboard';
+};
+
 const App: React.FC = () => {
 
   // --- Data State ---
@@ -89,32 +120,13 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<ProfileResponse | null>(null);
 
   // --- State ---
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const [view, setView] = useState<ViewType>(() => {
+  const initialRoute = resolveRoute(location.pathname);
+  const [view, setView] = useState<ViewType>(initialRoute.view);
 
-    const savedView = localStorage.getItem('view') as ViewType | null;
-
-    const hasToken = Boolean(getToken());
-
-    if (!hasToken) {
-
-      return 'login';
-
-    }
-
-    return savedView || 'dashboard';
-
-  });
-
-  const [activeTab, setActiveTab] = useState<TabType>(() => {
-
-    // localStorage에서 저장된 탭 복원
-
-    const savedTab = localStorage.getItem('activeTab');
-
-    return (savedTab as TabType) || 'dashboard';
-
-  });
+  const [activeTab, setActiveTab] = useState<TabType>(initialRoute.tab);
 
   useEffect(() => {
 
@@ -144,7 +156,7 @@ const App: React.FC = () => {
 
     }
 
-  }, [view]);
+  }, [location.pathname]);
 
   const [intensityType, setIntensityType] = useState<IntensityType>('revenue');
 
@@ -209,33 +221,12 @@ const App: React.FC = () => {
   ]);
   const [inputMessage, setInputMessage] = useState<string>('');
 
-  // 🌟 1. 커스텀 네비게이션 함수 (상태 변경 + 브라우저 주소창 기록)
+  // 경로 기반 네비게이션
   const navigateTo = useCallback((newView: ViewType, newTab: TabType = activeTab) => {
     setView(newView);
     setActiveTab(newTab);
-    // [프론트.txt 원리 적용] 화면을 새로고침하지 않고 URL과 히스토리만 몰래 추가합니다.
-    window.history.pushState({ view: newView, activeTab: newTab }, '', `?view=${newView}&tab=${newTab}`);
-  }, [activeTab]);
-
-  // 🌟 2. 브라우저 뒤로가기/앞으로가기 (popstate) 감지
-  useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      // 뒤로가기를 눌렀을 때 저장해둔 과거의 state를 꺼내서 화면을 되돌립니다.
-      if (event.state) {
-        setView(event.state.view || 'dashboard');
-        setActiveTab(event.state.activeTab || 'dashboard');
-      } else {
-        // state가 없으면 URL 파라미터를 직접 읽어서 복원합니다 (초기 진입 시)
-        const params = new URLSearchParams(window.location.search);
-        const urlView = params.get('view') as ViewType || 'dashboard';
-        const urlTab = params.get('tab') as TabType || 'dashboard';
-        setView(urlView);
-        setActiveTab(urlTab);
-      }
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+    navigate(buildPath(newView, newTab));
+  }, [activeTab, navigate]);
 
   // UI State
 
@@ -245,21 +236,53 @@ const App: React.FC = () => {
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  // view 변경 시 localStorage에 저장
-
-  useEffect(() => {
-
-    localStorage.setItem('view', view);
-
-  }, [view]);
-
-  // activeTab 변경 시 localStorage에 저장
+  // activeTab 변경 시 localStorage에 저장 (기존 동작 호환)
 
   useEffect(() => {
 
     localStorage.setItem('activeTab', activeTab);
 
   }, [activeTab]);
+
+  // URL -> 상태 동기화
+  useEffect(() => {
+    const { view: routeView, tab: routeTab } = resolveRoute(location.pathname);
+    setView(routeView);
+    setActiveTab(routeTab);
+  }, [location.pathname]);
+
+  // 인증 가드 및 기본 경로 리다이렉트
+  useEffect(() => {
+    const hasToken = Boolean(getToken());
+    const publicPaths = new Set(['/login', '/signup']);
+    const isKnownPath =
+      location.pathname === '/' ||
+      location.pathname === '/login' ||
+      location.pathname === '/signup' ||
+      location.pathname === '/welcome' ||
+      location.pathname === '/profile' ||
+      location.pathname === '/data-input' ||
+      location.pathname === '/reports' ||
+      location.pathname === '/analytics' ||
+      location.pathname === '/dashboard' ||
+      location.pathname === '/dashboard/compare' ||
+      location.pathname === '/dashboard/simulator' ||
+      location.pathname === '/dashboard/target';
+
+    if (!isKnownPath) {
+      navigate(hasToken ? '/dashboard' : '/login', { replace: true });
+      return;
+    }
+
+    if (!hasToken && !publicPaths.has(location.pathname)) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    if (hasToken && (location.pathname === '/' || publicPaths.has(location.pathname))) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [location.pathname, navigate]);
 
   // --- Effects: Fetch Data from API ---
 
@@ -1241,17 +1264,17 @@ Recommended staged plan
   // Early return for views ensuring selectedCompany is available
   if (view === 'login') return <Login onLogin={(companyName) => {
 
-    setView('welcome');
+    navigateTo('welcome');
 
-  }} onSignup={() => setView('signup')} />;
+  }} onSignup={() => navigateTo('signup')} />;
 
-  if (view === 'signup') return <Signup onBack={() => setView('login')} onComplete={(companyName) => {
+  if (view === 'signup') return <Signup onBack={() => navigateTo('login')} onComplete={(companyName) => {
 
-    setView('welcome');
+    navigateTo('welcome');
 
   }} />;
 
-  if (view === 'welcome') return <WelcomePage onContinue={() => setView('dashboard')} companyName={selectedCompany?.name || 'My Company'} />;
+  if (view === 'welcome') return <WelcomePage onContinue={() => navigateTo('dashboard')} companyName={selectedCompany?.name || 'My Company'} />;
 
 
   // 🌟 여기서부터는 로그인 이후 화면! Header를 절대 사라지지 않는 "뼈대"로 고정합니다.
@@ -1293,7 +1316,7 @@ Recommended staged plan
 
           removeToken();
 
-          setView('login');
+          navigateTo('login');
 
           setUserProfile(null);
 
@@ -1310,7 +1333,7 @@ Recommended staged plan
             onProfileUpdated={setUserProfile}
             onNavigate={(next) => {
               if (next === 'profile') {
-                setView('profile');
+                navigateTo('profile');
               } else {
                 navigateTo('dashboard', next as any);
               }
