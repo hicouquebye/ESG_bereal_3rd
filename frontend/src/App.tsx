@@ -23,7 +23,7 @@ import { DataInput } from './features/data-input/DataInput';
 import { Reports } from './features/reports/Reports';
 import { Analytics } from './features/analytics/Analytics';
 import { Profile } from './features/profile/Profile';
-import { MarketService } from './services/api';
+import { AiService, MarketService } from './services/api';
 import { getToken, removeToken } from './services/authApi';
 import { fetchProfile } from './services/profileApi';
 import type { ProfileResponse } from './services/profileApi';
