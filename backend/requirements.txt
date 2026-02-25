@@ -20,9 +20,7 @@ finance-datareader
 pandas
 yahoo_fin
 requests_html
-pykrx
 beautifulsoup4
 pandas-datareader
 lxml_html_clean
 requests
-

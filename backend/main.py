@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 # 앱 컴포넌트 가져오기
-from app.routers import simulator, ai, krx, dashboard, auth, profile
+from app.routers import simulator, ai, dashboard, auth, profile
 from app.services.market_data import market_service
 
 
@@ -54,7 +54,6 @@ app.add_middleware(
 # --- 앱 라우터 포함 ---
 app.include_router(simulator.router)
 app.include_router(ai.router)
-app.include_router(krx.router)
 app.include_router(dashboard.router)
 app.include_router(auth.router)
 app.include_router(profile.router)

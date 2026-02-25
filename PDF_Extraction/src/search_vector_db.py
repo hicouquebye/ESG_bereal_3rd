@@ -15,7 +15,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import chromadb
 from sentence_transformers import CrossEncoder, SentenceTransformer
@@ -219,6 +219,43 @@ def build_metadata_filter(filter_company: str | None, filter_year: int | None) -
         return conditions[0]
     return {"$and": conditions}
 
+def build_chroma_client(
+    vector_db_path: str | Path | None = None,
+    chroma_host: Optional[str] = None,
+    chroma_port: Optional[int] = None,
+    verbose: bool = True,
+):
+    """
+    원격 Chroma가 설정되어 있으면 HttpClient를 우선 사용하고,
+    실패하거나 미설정이면 로컬 PersistentClient로 fallback한다.
+    """
+    env_host = os.getenv("CHROMA_HOST")
+    env_port = os.getenv("CHROMA_PORT")
+    host = chroma_host or env_host
+
+    port: Optional[int] = chroma_port
+    if port is None and env_port:
+        try:
+            port = int(env_port)
+        except ValueError:
+            port = None
+    if port is None:
+        port = 8000
+
+    if host:
+        try:
+            if verbose:
+                print(f"🌐 Chroma HttpClient 연결 시도: {host}:{port}")
+            return chromadb.HttpClient(host=host, port=port), f"http://{host}:{port}"
+        except Exception as exc:
+            if verbose:
+                print(f"⚠️ 원격 Chroma 연결 실패, 로컬로 fallback: {exc}")
+
+    db_dir = Path(vector_db_path or VECTOR_DB_DIR)
+    if verbose:
+        print(f"📁 Chroma PersistentClient 사용: {db_dir}")
+    return chromadb.PersistentClient(path=str(db_dir)), str(db_dir)
+
 
 def search_vector_db(
     query: str,
@@ -229,12 +266,18 @@ def search_vector_db(
     filter_company: str | None = None,
     filter_year: int | None = None,
     vector_db_path: str | Path | None = None,
+    chroma_host: str | None = None,
+    chroma_port: int | None = None,
     verbose: bool = True,
 ):
-    db_dir = Path(vector_db_path or VECTOR_DB_DIR)
+    client, target = build_chroma_client(
+        vector_db_path=vector_db_path,
+        chroma_host=chroma_host,
+        chroma_port=chroma_port,
+        verbose=verbose,
+    )
     if verbose:
-        print(f"🔎 Query='{query}' | Mode={mode} | Top {top_k} | DB={db_dir}")
-    client = chromadb.PersistentClient(path=str(db_dir))
+        print(f"🔎 Query='{query}' | Mode={mode} | Top {top_k} | Target={target}")
     collections = load_collections(client)
     if not collections:
         if verbose:
@@ -318,6 +361,8 @@ if __name__ == "__main__":
     parser.add_argument("--show-scores", action="store_true", help="각 결과의 내부 점수 출력")
     parser.add_argument("--company", type=str, default=None, help="회사명 필터")
     parser.add_argument("--year", type=int, default=None, help="보고서 연도 필터")
+    parser.add_argument("--chroma-host", type=str, default=None, help="원격 Chroma host")
+    parser.add_argument("--chroma-port", type=int, default=None, help="원격 Chroma port")
     args = parser.parse_args()
 
     search_vector_db(
@@ -328,4 +373,6 @@ if __name__ == "__main__":
         show_scores=args.show_scores,
         filter_company=getattr(args, "company", None),
         filter_year=getattr(args, "year", None),
+        chroma_host=getattr(args, "chroma_host", None),
+        chroma_port=getattr(args, "chroma_port", None),
     )

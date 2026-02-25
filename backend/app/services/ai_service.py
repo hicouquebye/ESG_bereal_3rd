@@ -149,8 +149,25 @@ class AIService:
                 return
 
             print("⏳ [RAG] Loading embedding model BAAI/bge-m3...")
-            self.embedding_model = SentenceTransformer("BAAI/bge-m3")
-            print("✅ [RAG] Embedding model loaded.")
+            try:
+                # Prefer safetensors to avoid torch.load path restrictions on some environments.
+                self.embedding_model = SentenceTransformer(
+                    "BAAI/bge-m3",
+                    model_kwargs={"use_safetensors": True},
+                )
+                print("✅ [RAG] Embedding model loaded (safetensors).")
+            except Exception as emb_exc:
+                print(f"⚠️ [RAG] bge-m3 load failed: {emb_exc}")
+                try:
+                    # Fallback to lighter multilingual model for stability.
+                    self.embedding_model = SentenceTransformer(
+                        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+                        model_kwargs={"use_safetensors": True},
+                    )
+                    print("✅ [RAG] Fallback embedding model loaded.")
+                except Exception as fallback_exc:
+                    self.embedding_model = None
+                    print(f"❌ [RAG] Embedding model load failed: {fallback_exc}")
 
         except Exception as e:
             print(f"❌ [RAG Error] Failed to initialize Vector DB: {e}")
@@ -208,9 +225,33 @@ class AIService:
         }
 
     def _fast_path_response(self, message: str) -> Optional[str]:
+        normalized = (message or "").strip().lower()
+        if normalized in {"안녕", "안녕하세요", "ㅎㅇ", "hi", "hello", "hey"}:
+            return "안녕하세요. 무엇을 도와드릴까요?"
         if "시뮬레이터" in message:
             return "상단의 '시뮬레이터' 탭을 누르시면 탄소 비용 예측 대시보드를 보실 수 있습니다."
         return None
+
+    def _should_use_rag(self, message: str) -> bool:
+        text = (message or "").strip().lower()
+        if not text:
+            return False
+
+        # Smalltalk/짧은 인사에는 RAG를 태우지 않는다.
+        smalltalk = {
+            "안녕", "안녕하세요", "ㅎㅇ", "hi", "hello", "hey", "thanks", "thank you",
+            "고마워", "감사", "뭐해", "반가워"
+        }
+        if text in smalltalk:
+            return False
+
+        # 보고서/ESG/시장 데이터 질문에서만 RAG를 활성화한다.
+        rag_keywords = [
+            "esg", "지속가능", "보고서", "온실가스", "배출", "탄소", "감축", "scope",
+            "ifrs", "esrs", "sbti", "시장", "매수", "kau", "eua", "ets", "벤치마크",
+            "지표", "배출량", "집약도", "시뮬레이터", "회사", "기업", "연도",
+        ]
+        return any(keyword in text for keyword in rag_keywords)
 
 
     def _is_last_year_query(self, message: str) -> bool:
@@ -300,6 +341,141 @@ class AIService:
         source_line = f"- {company} {year} Report (p.{page})"
         return snippet, source_line
 
+    def _build_where_filter(
+        self,
+        company_name: Optional[str],
+        company_key: Optional[str],
+        report_year: Optional[int],
+    ) -> Optional[dict]:
+        conditions: List[dict] = []
+        company_candidates = self._expand_company_aliases(company_name, company_key)
+        if company_candidates:
+            if len(company_candidates) == 1:
+                conditions.append({"company_name": company_candidates[0]})
+            else:
+                conditions.append(
+                    {"$or": [{"company_name": candidate} for candidate in company_candidates]}
+                )
+        if report_year is not None:
+            conditions.append({"report_year": report_year})
+        if not conditions:
+            return None
+        if len(conditions) == 1:
+            return conditions[0]
+        return {"$and": conditions}
+
+    def _expand_company_aliases(
+        self, company_name: Optional[str], company_key: Optional[str]
+    ) -> List[str]:
+        alias_map = {
+            "현대건설": ["HDEC"],
+            "HDEC": ["현대건설"],
+            "삼성물산": ["Samsung", "Samsung C&T"],
+            "Samsung": ["삼성물산"],
+            "Samsung C&T": ["삼성물산"],
+        }
+        seeds: List[str] = []
+        for value in (company_name, company_key):
+            if value:
+                text = str(value).strip()
+                if text:
+                    seeds.append(text)
+
+        expanded: List[str] = []
+        for seed in seeds:
+            if seed not in expanded:
+                expanded.append(seed)
+            for alias in alias_map.get(seed, []):
+                if alias not in expanded:
+                    expanded.append(alias)
+        return expanded
+
+    @staticmethod
+    def _tokenize_query(text: Optional[str]) -> List[str]:
+        if not text:
+            return []
+        tokens = []
+        for part in str(text).lower().replace("\n", " ").split(" "):
+            token = part.strip(".,!?()[]{}\"':;")
+            if len(token) >= 2:
+                tokens.append(token)
+        return tokens[:15]
+
+    def _score_document_by_query(self, document: str, query_tokens: List[str]) -> int:
+        if not query_tokens:
+            return 0
+        doc_lower = str(document).lower()
+        return sum(1 for token in query_tokens if token in doc_lower)
+
+    def _retrieve_context_by_metadata(
+        self,
+        message: Optional[str],
+        company_name: Optional[str],
+        company_key: Optional[str],
+        report_year: Optional[int],
+        limit: int = 5,
+    ) -> Tuple[str, List[str]]:
+        """
+        Embedding query가 실패해도 company/year 메타데이터 기준으로 컨텍스트를 복구한다.
+        """
+        collections = [c for c in [self.chunk_collection, self.page_collection, self.collection] if c]
+        if not collections:
+            return "", []
+
+        primary_where = self._build_where_filter(company_name, company_key, report_year)
+        year_only_where = {"report_year": report_year} if report_year is not None else None
+        company_only_where = self._build_where_filter(company_name, company_key, None)
+
+        where_candidates: List[Optional[dict]] = []
+        for where in [primary_where, company_only_where, year_only_where, None]:
+            if where not in where_candidates:
+                where_candidates.append(where)
+
+        query_tokens = self._tokenize_query(message)
+
+        for where in where_candidates:
+            ranked_pairs: List[Tuple[int, str, dict]] = []
+            for collection in collections:
+                try:
+                    kwargs = {
+                        "include": ["documents", "metadatas"],
+                        "limit": max(limit * 6, 30),
+                    }
+                    if where is not None:
+                        kwargs["where"] = where
+                    data = collection.get(**kwargs)
+                    docs = data.get("documents") or []
+                    metas = data.get("metadatas") or []
+                    for doc, meta in zip(docs, metas):
+                        if not isinstance(doc, str):
+                            continue
+                        score = self._score_document_by_query(doc, query_tokens)
+                        ranked_pairs.append((score, doc, meta or {}))
+                except Exception as exc:
+                    print(f"⚠️ [RAG] Metadata fallback query failed: {exc}")
+
+            if not ranked_pairs:
+                continue
+
+            ranked_pairs.sort(key=lambda x: x[0], reverse=True)
+            # 질의 토큰이 있는데 전부 score 0이면 관련 문맥이 없는 것으로 본다.
+            if query_tokens and ranked_pairs[0][0] <= 0:
+                continue
+            selected = ranked_pairs[:limit]
+
+            context_parts: List[str] = []
+            source_info: List[str] = []
+            for _, doc, meta in selected:
+                snippet, source_line = self._format_context_entry(doc, meta)
+                context_parts.append(snippet)
+                if source_line and source_line not in source_info:
+                    source_info.append(source_line)
+
+            if context_parts:
+                return "".join(context_parts), source_info
+
+        return "", []
+
     def _metadata_matches(
         self,
         metadata: Optional[dict],
@@ -373,7 +549,9 @@ class AIService:
         source_info: List[str] = []
 
         if not self.embedding_model:
-            return "", []
+            return self._retrieve_context_by_metadata(
+                message, company_name, company_key, report_year
+            )
 
         collection = self.chunk_collection or self.page_collection or self.collection
         if not collection:
@@ -412,6 +590,13 @@ class AIService:
 
         except Exception as e:
             print(f"❌ [RAG Search Error] {e}")
+            # fallback: dimension mismatch 등 임베딩 검색 실패 시 메타데이터 조회로 복구
+            fallback_ctx, fallback_sources = self._retrieve_context_by_metadata(
+                message, company_name, company_key, report_year
+            )
+            if fallback_ctx:
+                print("✅ [RAG] Metadata fallback contexts loaded.")
+                return fallback_ctx, fallback_sources
 
         return "".join(context_parts), source_info
 
@@ -482,6 +667,7 @@ class AIService:
         history: List[dict],
         company_name: Optional[str] = None,
         report_year: Optional[int] = None,
+        apply_scope: bool = True,
     ) -> List[dict]:
         system_prompt = (
             "You are an expert ESG consultant. "
@@ -502,7 +688,7 @@ class AIService:
             messages.append({"role": role, "content": text})
 
         user_content = message.strip()
-        if company_name or report_year:
+        if apply_scope and (company_name or report_year):
             scope_note = company_name or "선택된 기업"
             if report_year:
                 scope_note += f" {report_year}년"
@@ -544,15 +730,19 @@ class AIService:
                 report_year = inferred_year
                 message = f"{message}\n\n[Interpretation] 'last year' means data year (report_year-1) from the latest report. Provide {report_year - 1} values."
 
-        context_start = time.perf_counter()
-        context, source_info = self._retrieve_context(
-            message, company_name, company_key, report_year
-        )
-        print(
-            f"⏱️ [Perf] Context retrieval took {time.perf_counter() - context_start:.2f}s"
-        )
+        use_rag = self._should_use_rag(message)
+        context = ""
+        source_info: List[str] = []
+        if use_rag:
+            context_start = time.perf_counter()
+            context, source_info = self._retrieve_context(
+                message, company_name, company_key, report_year
+            )
+            print(
+                f"⏱️ [Perf] Context retrieval took {time.perf_counter() - context_start:.2f}s"
+            )
 
-        if (company_name or company_key or report_year) and not context:
+        if use_rag and (company_name or company_key or report_year) and not context:
             target = company_name or company_key or (
                 f"{report_year}년 보고서" if report_year else "선택된 범위"
             )
@@ -564,7 +754,9 @@ class AIService:
         if not settings.OPENAI_API_KEY:
             return "⚠️ OpenAI API Key가 설정되지 않았습니다. .env 파일을 확인해주세요."
 
-        messages = self._build_messages(message, context, history, company_name, report_year)
+        messages = self._build_messages(
+            message, context, history, company_name, report_year, apply_scope=use_rag
+        )
 
         try:
             llm_start = time.perf_counter()
@@ -611,15 +803,19 @@ class AIService:
             if inferred_year:
                 report_year = inferred_year
 
-        context_start = time.perf_counter()
-        context, source_info = self._retrieve_context(
-            message, company_name, company_key, report_year
-        )
-        print(
-            f"⏱️ [Perf] Context retrieval took {time.perf_counter() - context_start:.2f}s"
-        )
+        use_rag = self._should_use_rag(message)
+        context = ""
+        source_info: List[str] = []
+        if use_rag:
+            context_start = time.perf_counter()
+            context, source_info = self._retrieve_context(
+                message, company_name, company_key, report_year
+            )
+            print(
+                f"⏱️ [Perf] Context retrieval took {time.perf_counter() - context_start:.2f}s"
+            )
 
-        if (company_name or company_key or report_year) and not context:
+        if use_rag and (company_name or company_key or report_year) and not context:
             target = company_name or company_key or (
                 f"{report_year}년 보고서" if report_year else "선택된 범위"
             )
@@ -633,7 +829,9 @@ class AIService:
             yield "⚠️ OpenAI API Key가 설정되지 않았습니다. .env 파일을 확인해주세요."
             return
 
-        messages = self._build_messages(message, context, history, company_name, report_year)
+        messages = self._build_messages(
+            message, context, history, company_name, report_year, apply_scope=use_rag
+        )
 
         try:
             client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
