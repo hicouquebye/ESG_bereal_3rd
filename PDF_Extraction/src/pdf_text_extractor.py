@@ -74,27 +74,28 @@ def sanitize_pdf(pdf_path: str | Path, page_range: Optional[Tuple[int, int]] = N
         # --- 1. Reconstruct Drawings (Lines, Rects for Table Borders) ---
         try:
             paths = page.get_drawings()
+            shape = new_page.new_shape()
             for path in paths:
                 color = path.get("color")
                 fill = path.get("fill")
                 width = path.get("width", 1)
                 
                 # SMART CONTRAST ENHANCEMENT
-                # Diagnosis: PDF uses 0.25pt (Thin) + ~0.5 (Gray) RGB, making lines invisible.
-                # Fix: If it's a "line" (stroke) and the color is "Gray-ish" (not White/Light), snap to BLACK.
-                # This boosts visibility without changing width (hierarchy).
                 if color: 
-                    # Check if it's not too light (e.g. avoid turning light gray fills into black)
                     if max(color) < 0.9: 
                         color = (0, 0, 0)
 
                 for item in path["items"]:
-                    if item[0] == "l": # Line
-                        new_page.draw_line(item[1], item[2], color=color, width=width)
-                    elif item[0] == "re": # Rect
-                        new_page.draw_rect(item[1], color=color, fill=fill, width=width)
-                    elif item[0] == "c": # Curve
-                        new_page.draw_bezier(item[1], item[2], item[3], item[4], color=color, fill=fill, width=width)
+                    if item[0] == "l": 
+                        shape.draw_line(item[1], item[2])
+                    elif item[0] == "re": 
+                        shape.draw_rect(item[1])
+                    elif item[0] == "c": 
+                        shape.draw_bezier(item[1], item[2], item[3], item[4])
+                        
+                shape.finish(color=color, fill=fill, width=width)
+                
+            shape.commit()
         except Exception:
             pass # Suppress minor drawing errors
 
@@ -152,11 +153,10 @@ def sanitize_pdf(pdf_path: str | Path, page_range: Optional[Tuple[int, int]] = N
 
 def check_docling_compatibility(pdf_path: Path) -> bool:
     """
-    Docling이 이 PDF를 정상적으로 읽을 수 있는지 테스트한다.
-    - OCR을 끄고 빠르게 변환 시도
-    - 인코딩 오류가 발생하거나 텍스트가 텅 비었으면 False 반환
-    - 첫 페이지만 체크하면 일부만 정상이고 뒤가 깨지는 경우를 놓칠 수 있으므로,
-      [1페이지, 중간 페이지, 마지막 페이지]를 샘플링하여 검사한다.
+    Docling이 이 PDF를 정상적으로 읽을 수 있는지 평가합니다.
+    - 5개 페이지를 균등하게 샘플링하여 테스트합니다.
+    - 샘플 중 절반 초과가 실패하면 전체 파일이 깨졌다고 간주(False).
+    - 절반 이하면 "일부 페이지 오류"로 간주하여 부분 추출 허용(True).
     """
     print(f"[Check] Verifying Docling compatibility for: {pdf_path.name}")
     
@@ -169,39 +169,46 @@ def check_docling_compatibility(pdf_path: Path) -> bool:
     )
     
     try:
-        # Get total page count first
         with fitz.open(pdf_path) as doc:
             total_pages = len(doc)
             
-        # Sample strategy: First, Middle, Last
-        if total_pages < 3:
-            test_pages = list(range(1, total_pages + 1))
-        else:
-            test_pages = [1, total_pages // 2, total_pages]
+        # Sample 5 evenly distributed pages
+        sample_count = min(5, total_pages)
+        if sample_count == 0:
+            return False
+            
+        step = max(1, total_pages // sample_count)
+        test_pages = [1 + i * step for i in range(sample_count)]
+        test_pages[-1] = total_pages # Ensure last page is included
+        test_pages = sorted(list(set(test_pages))) # Remove duplicates if very short PDF
             
         print(f"  Sampling pages {test_pages} for validation...")
         
-        # Docling accepts specific page numbers, but standard convert() takes range or we call it multiple times.
-        # To be efficient, we can check them one by one or in a batch. 
-        # Docling's page_range arg is (start, end) inclusive, doesn't support list.
-        # So we iterate.
+        failed_count = 0
         
         for p in test_pages:
-            res = converter.convert(pdf_path, page_range=(p, p))
-            markdown = res.document.export_to_markdown().strip()
-            
-            if not markdown:
-                print(f"  ⚠️ Content missing on page {p}. Likely encoding issue.")
-                return False
-            
-            # Additional Heuristic: Check for replacement characters if needed
-            # if "\ufffd" in markdown: ...
-            
-        print("  ✅ Docling can read sampled pages successfully.")
-        return True
+            try:
+                res = converter.convert(pdf_path, page_range=(p, p))
+                markdown = res.document.export_to_markdown().strip()
+                if not markdown:
+                    print(f"  ⚠️ Content missing on page {p}.")
+                    failed_count += 1
+            except Exception as e:
+                print(f"  ❌ Extraction error on page {p}: {e}")
+                failed_count += 1
+
+        fail_ratio = failed_count / len(test_pages)
+        print(f"  Validation result: {failed_count}/{len(test_pages)} pages failed ({fail_ratio*100:.1f}%)")
         
+        if fail_ratio > 0.5:
+            print("  ❌ Majority of sampled pages failed. Full sanitization required.")
+            return False
+        else:
+            print("  ✅ Document is mostly readable. Allowing partial extraction.")
+            return True
+            
     except Exception as e:
-        print(f"  ❌ Docling extraction failed: {e}")
+        print(f"  ❌ Docling initialization failed entirely: {e}")
         return False
 
 

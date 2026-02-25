@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-02-25
+
+### [fix+feat] 업계 벤치마크(Industry Benchmark) 시스템 구축 및 데이터 정합성 강화
+- `IndustryBenchmark` 모델 추가 및 기존 `revenue/production` 기준에서 `carbon_intensity/energy_intensity` 기반 컬럼으로 전면 수정
+- `GET /api/v1/dashboard/benchmarks` 엔드포인트 구현을 통해 프론트엔드 비교 분석 데이터 실시간 연동 (404 에러 해결)
+- `backend/patch_ground_truth.py` 내 탄소 집약도(ci_s1, ci_s2 등) 자동 계산 로직 추가 및 기존 데이터 강제 업데이트 기능 구현
+- 최신 연도(2024년) 데이터를 분석하여 업계 벤치마크를 자동 산출하는 `backend/update_benchmarks.py` 스크립트 구축
+- `backend/app/models.py` / `backend/app/routers/dashboard.py` / `backend/app/init_db.py` / `backend/patch_ground_truth.py`
+
+---
+
 ## 2026-02-22
 
 ### [fix+feat] Dashboard 탭 KPI 및 UI 연동 오류 수정

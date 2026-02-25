@@ -21,6 +21,10 @@ import sys
 from pathlib import Path
 
 import pypdfium2 as pdfium
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # 실행할 개별 스크립트 경로 정의
 SRC_DIR = Path(__file__).parent.resolve()
@@ -67,6 +71,11 @@ def main():
 
     # 추가 기능: 벡터 DB 구축 + 검색 자동화
     parser.add_argument("--build-vector-db", action="store_true", help="테이블/그림 적재 후 벡터 DB도 즉시 구축")
+    parser.add_argument("--reset-vector-db", action="store_true", help="벡터 DB를 초기화하고 재구축 (주의)")
+    parser.add_argument("--remote-host", type=str, default=os.getenv("CHROMA_HOST", None), help="원격 Chroma 서버 호스트 (기본: 환경변수 CHROMA_HOST)")
+    parser.add_argument("--remote-port", type=int, default=os.getenv("CHROMA_PORT", None), help="원격 Chroma 서버 포트 (기본: 환경변수 CHROMA_PORT)")
+    parser.add_argument("--company", type=str, default=None, help="벡터 DB 파이프라인 진행시 필터링할 회사명")
+    parser.add_argument("--year", type=int, default=None, help="벡터 DB 파이프라인 진행시 필터링할 연도")
     parser.add_argument(
         "--search-queries",
         nargs="*",
@@ -172,7 +181,18 @@ def main():
     build_vector_flag = args.build_vector_db or (args.search_queries is not None and len(args.search_queries) > 0)
     if build_vector_flag:
         print("\n💡 벡터 DB는 DB 적재된 데이터를 기반으로 하므로 load_db 실행을 권장합니다.")
-        cmd_vector = [sys.executable, str(SCRIPT_BUILD_VECTOR), "--reset"]
+        cmd_vector = [sys.executable, str(SCRIPT_BUILD_VECTOR)]
+        if args.reset_vector_db:
+            cmd_vector.append("--reset")
+        if args.remote_host:
+            cmd_vector.extend(["--remote-host", args.remote_host])
+        if args.remote_port:
+            cmd_vector.extend(["--remote-port", str(args.remote_port)])
+        if args.company:
+            cmd_vector.extend(["--company", args.company])
+        if args.year:
+            cmd_vector.extend(["--year", str(args.year)])
+        
         run_command(cmd_vector, "Step 6: Vector DB Build")
 
     # 8. 벡터 검색 (옵션)
