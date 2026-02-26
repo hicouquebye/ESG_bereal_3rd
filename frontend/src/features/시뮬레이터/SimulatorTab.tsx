@@ -799,6 +799,44 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                 </div>
                             </div>
                             <div className="pt-6 border-t border-slate-800">
+                                <div className="flex items-center justify-between mb-3">
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">연간 탄소 예산 (BUDGET)</p>
+                                    {isEditingBudget ? (
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="text"
+                                                value={tempBudgetStr}
+                                                onChange={(e) => setTempBudgetStr(e.target.value)}
+                                                className="w-20 px-2 py-1 bg-slate-800 border-b border-white text-xs text-white focus:outline-none focus:border-emerald-400 font-bold"
+                                                autoFocus
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleBudgetSave();
+                                                    else if (e.key === 'Escape') {
+                                                        setTempBudgetStr(String(simBudget));
+                                                        setIsEditingBudget(false);
+                                                    }
+                                                }}
+                                            />
+                                            <span className="text-[10px] text-slate-400 font-bold">억 원</span>
+                                            <button
+                                                onClick={handleBudgetSave}
+                                                className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+                                            >
+                                                저장
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => {
+                                                setTempBudgetStr(String(simBudget));
+                                                setIsEditingBudget(true);
+                                            }}
+                                            className="text-xs font-bold text-white hover:text-emerald-300 transition-colors"
+                                        >
+                                            ₩{fmt(budgetBillion)} (수정)
+                                        </button>
+                                    )}
+                                </div>
                                 <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase tracking-tight flex items-center gap-2">
                                     <ShieldCheck size={12} className="text-emerald-400" /> 리스크 등급
                                 </p>
