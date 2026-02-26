@@ -67,8 +67,8 @@ graph TB
     subgraph "Data & AI Layer"
         MySQL[(MySQL DB<br/>users / dashboard_emissions)]
         ChromaDB[(ChromaDB<br/>Vector Store / RAG)]
-        Ollama[Ollama LLM<br/>qwen2.5:7b Local]
-        SBERT[Sentence-BERT<br/>jhgan/ko-sroberta-multitask]
+        OpenAI[OpenAI API<br/>gpt-4o / gpt-4o-mini]
+        BGE[BGE Embedding / Reranker<br/>bge-m3, bge-reranker-v2-m3]
     end
 
     subgraph "External Data Sources"
@@ -83,8 +83,8 @@ graph TB
     Profile --> MySQL
     Dashboard --> MySQL
     Sim --> yfinance & FDR
-    AI --> ChromaDB & Ollama
-    ChromaDB --> SBERT
+    AI --> ChromaDB & OpenAI
+    ChromaDB --> BGE
 ```
 
 ---
@@ -180,18 +180,19 @@ graph TB
   - 전략 보조: 별도 `strategy` 엔드포인트로 시뮬레이터 전략 문안 생성
 - **기술 요소**:
   - API: `POST /api/v1/ai/chat` (StreamingResponse), `POST /api/v1/ai/strategy`, `POST /api/v1/ai/text-to-sql`
-  - RAG: ChromaDB 유사도 검색 + SBERT 임베딩
-  - LLM: Ollama(`qwen2.5:7b`) 연동
+  - RAG: 질문 의도 기반 라우팅 후 ChromaDB 하이브리드 검색(semantic+BM25) + rerank
+  - LLM: OpenAI(`gpt-4o`, `gpt-4o-mini`) 응답 생성
 - **RAG 파이프라인**:
 
   ```
   사용자 질문
-    → ChromaDB 코사인 유사도 검색 (Top-5 청크)
-    → 검색된 컨텍스트 + 대화 히스토리 + 시스템 프롬프트
-    → 실시간 토큰 응답 (fetch ReadableStream)
+    → 의도 판별(RAG 필요 여부)
+    → [RAG ON] ChromaDB 검색(semantic/BM25 + rerank) + 메타데이터 필터
+    → 컨텍스트 + 대화 히스토리 + 시스템 프롬프트
+    → OpenAI 스트리밍 응답
   ```
 
-- **기술 요소**: ChromaDB, Sentence-BERT, FastAPI StreamingResponse, 프론트 `ReadableStream` 처리.
+- **기술 요소**: ChromaDB, Sentence-Transformers(`BAAI/bge-m3`), CrossEncoder reranker, FastAPI StreamingResponse, 프론트 `ReadableStream` 처리.
 
 ---
 
@@ -256,9 +257,10 @@ graph TB
 
 | 기술                              | 용도                                                                         |
 |:--------------------------------- |:---------------------------------------------------------------------------- |
-| **Ollama (qwen2.5:7b)**           | 챗봇/전략 생성 로컬 추론 엔진                                                  |
+| **OpenAI API**                     | 챗봇/전략 생성 LLM 응답 엔진 (`gpt-4o`, `gpt-4o-mini`)                         |
 | **ChromaDB**                      | RAG 벡터 저장소 (로컬 Persistent 또는 원격 HTTP 서버)                          |
 | **Sentence-Transformers**         | 임베딩 모델 (`BAAI/bge-m3`)                                                    |
+| **CrossEncoder**                  | 리랭킹 모델 (`BAAI/bge-reranker-v2-m3`)                                        |
 | **Docling & PyMuPDF**             | PDF 구조 추출 및 벡터화 전처리                                                 |
 
 ---
@@ -274,7 +276,6 @@ ESG_Dashboard/
 ├── backend/
 │   ├── requirements.txt              # 백엔드 전용 의존성
 │   ├── main.py                       # 통합 엔트리포인트 (RAG 보조 엔드포인트 포함)
-│   ├── debug_api.py
 │   └── app/
 │       ├── main.py                   # 코어 API 서버 엔트리포인트
 │       ├── config.py                 # .env 기반 설정 로더
@@ -354,7 +355,7 @@ ESG_Dashboard/
 | Python       | 3.11.x   | 백엔드 서버 및 PDF/RAG 파이프라인     |
 | Node.js      | 18+      | 프론트엔드 빌드                      |
 | MySQL        | 5.7+     | 사용자 및 배출량 데이터 저장          |
-| Ollama       | 최신     | 로컬 LLM (선택)                      |
+| OpenAI API Key | 유효 키 | 챗봇/전략 생성 LLM 호출              |
 
 ### 8.1 백엔드 가동
 
@@ -411,12 +412,6 @@ python src/build_vector_db.py
 - 기본 로컬 경로는 `PDF_Extraction/vector_db`입니다.
 - 벡터DB가 없으면 챗봇 API는 실행되지만 RAG 근거 검색 품질이 떨어질 수 있습니다.
 
-#### Ollama 모델 준비 (선택)
-
-```bash
-ollama pull qwen2.5:7b
-```
-
 ### 8.4 환경 변수 설정
 
 프로젝트 루트 `.env` 예시:
@@ -438,7 +433,6 @@ JWT_ALGORITHM=HS256
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
 
 # --- RAG/LLM ---
-OLLAMA_API_URL=http://localhost:11434
 VECTOR_DB_PATH=/absolute/path/to/vector_db   # 선택
 CHROMA_HOST=                                  # 원격 사용 시 설정
 CHROMA_PORT=8000
