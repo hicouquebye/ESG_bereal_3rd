@@ -3,11 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import type {
   TabType, MarketType, IntensityType, TimeRangeType,
   TrendData, Tranche, ChatMessage, CompanyConfig,
-  PriceScenarioType, AllocationChangeType, ReductionOption, SimResult, StrategyDetail
+  PriceScenarioType, AllocationChangeType, SimResult, StrategyDetail
 } from './types';
 import {
   MARKET_DATA, MOCK_COMPANIES,
-  ETS_PRICE_SCENARIOS, ALLOCATION_SCENARIOS, DEFAULT_REDUCTION_OPTIONS, AUCTION_CONFIG
+  ETS_PRICE_SCENARIOS, ALLOCATION_SCENARIOS, AUCTION_CONFIG
 } from './data/mockData';
 import { API_BASE_URL } from './config';
 import { Header } from './components/layout/Header';
@@ -181,7 +181,8 @@ const App: React.FC = () => {
 
   ]);
 
-  const [simBudget, setSimBudget] = useState<number>(75);
+  const [simBudget, setSimBudget] = useState<number>(350);
+  const [eurKrwRate, setEurKrwRate] = useState<number>(1450);
 
   const [simRisk, setSimRisk] = useState<number>(25);
 
@@ -197,17 +198,9 @@ const App: React.FC = () => {
 
   const [emissionChange, setEmissionChange] = useState<number>(0);
 
-  const [reductionOptions, setReductionOptions] = useState<ReductionOption[]>(DEFAULT_REDUCTION_OPTIONS);
-
   const [auctionEnabled, setAuctionEnabled] = useState<boolean>(true);
 
   const [auctionTargetPct, setAuctionTargetPct] = useState<number>(10);
-
-  const toggleReduction = useCallback((id: string) => {
-
-    setReductionOptions(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
-
-  }, []);
 
   const [selectedCompId, setSelectedCompId] = useState<number>(1);
 
@@ -371,6 +364,36 @@ const App: React.FC = () => {
 
     return () => clearInterval(interval);
 
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchFxRate = async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      try {
+        const res = await fetch('https://open.er-api.com/v6/latest/EUR', {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!res.ok) return;
+        const json = await res.json();
+        const krwRate = Number(json?.rates?.KRW);
+        if (isMounted && Number.isFinite(krwRate) && krwRate > 0) {
+          setEurKrwRate(Math.round(krwRate));
+        }
+      } catch {
+        // Keep fallback value (1450) when live FX fetch fails
+      }
+    };
+
+    fetchFxRate();
+    const interval = setInterval(fetchFxRate, 60 * 60 * 1000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const trendData = useMemo<any[]>(() => {
@@ -545,19 +568,9 @@ const App: React.FC = () => {
 
     const adjustedAllocation = Math.round(baseAllocation * ALLOCATION_SCENARIOS[allocationChange].factor);
 
-    const enabledOptions = reductionOptions.filter(r => r.enabled);
-
-    const thisYearReduction = enabledOptions
-
-      .filter(r => r.thisYearApplicable)
-
-      .reduce((sum, r) => sum + r.annualReduction, 0);
-
-    const nextYearReduction = enabledOptions
-
-      .filter(r => !r.thisYearApplicable)
-
-      .reduce((sum, r) => sum + r.annualReduction, 0);
+    const enabledOptions: any[] = [];
+    const thisYearReduction = 0;
+    const nextYearReduction = 0;
 
     const netExposure = Math.max(0, adjustedEmissions - adjustedAllocation - thisYearReduction);
 
@@ -567,11 +580,7 @@ const App: React.FC = () => {
 
     // === Step 3: 감축비용 (내부 감축 투자비) ===
 
-    const totalAbatementCost = (enabledOptions
-
-      .filter(r => r.thisYearApplicable)
-
-      .reduce((sum, r) => sum + r.cost, 0)) * 1e8;
+    const totalAbatementCost = 0;
 
     // === 합산 ===
     let complianceCostCurrent = netExposure * currentETSPrice;
@@ -597,11 +606,7 @@ const App: React.FC = () => {
 
     const profitImpact = operatingProfit > 0 ? (totalCarbonCost / operatingProfit) * 100 : 0;
 
-    const economicAbatementPotential = reductionOptions
-
-      .filter(r => r.mac < currentETSPrice && r.thisYearApplicable)
-
-      .reduce((sum, r) => sum + r.annualReduction, 0);
+    const economicAbatementPotential = 0;
 
     const totalHandled = adjustedAllocation + thisYearReduction + netExposure;
 
@@ -611,7 +616,7 @@ const App: React.FC = () => {
 
     const baseNetExposure = Math.max(0, adjustedEmissions - adjustedAllocation);
 
-    const economicOptions = reductionOptions.filter(r => r.mac < currentETSPrice && r.thisYearApplicable);
+    const economicOptions: any[] = [];
 
     const econReduction = economicOptions.reduce((s, r) => s + r.annualReduction, 0);
 
@@ -662,7 +667,7 @@ const App: React.FC = () => {
 
     };
 
-    const allThisYearOptions = reductionOptions.filter(r => r.thisYearApplicable);
+    const allThisYearOptions: any[] = [];
 
     const allReduction = allThisYearOptions.reduce((s, r) => s + r.annualReduction, 0);
 
@@ -708,7 +713,7 @@ const App: React.FC = () => {
 
     };
 
-  }, [selectedComp, emissionChange, allocationChange, reductionOptions, selectedConfig, currentETSPrice, auctionEnabled, auctionTargetPct]);
+  }, [selectedComp, emissionChange, allocationChange, selectedConfig, currentETSPrice, auctionEnabled, auctionTargetPct]);
 
   // [핵심] DB의 집약도 데이터로 집약도 계산
 
@@ -1415,8 +1420,6 @@ Recommended staged plan
                     setAllocationChange={setAllocationChange}
                     emissionChange={emissionChange}
                     setEmissionChange={setEmissionChange}
-                    reductionOptions={reductionOptions}
-                    toggleReduction={toggleReduction}
                     auctionEnabled={auctionEnabled}
                     setAuctionEnabled={setAuctionEnabled}
                     auctionTargetPct={auctionTargetPct}
@@ -1424,12 +1427,18 @@ Recommended staged plan
                     simResult={simResult}
                     currentETSPrice={currentETSPrice}
                     baseAllocation={(selectedConfig.allowance ?? 0) > 0 ? (selectedConfig.allowance as number) : selectedConfig.baseEmissions * 0.9}
+                    overseasBaseEmissions={Math.max(
+                      0,
+                      (selectedConfig.s1Overseas ?? selectedConfig.s1 ?? 0) +
+                      (selectedConfig.s2Overseas ?? selectedConfig.s2 ?? 0)
+                    )}
                     tranches={tranches}
                     setTranches={setTranches}
                     simBudget={simBudget}
                     setSimBudget={setSimBudget}
                     liveKetsPrice={latestKetsData.price}
                     liveEutsPrice={latestEutsData.price}
+                    eurKrwRate={eurKrwRate}
                     auctionSavingsRate={auctionSavingsRate}
                   />
                 )}

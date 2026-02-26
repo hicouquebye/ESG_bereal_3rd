@@ -19,6 +19,10 @@ export interface CompanyConfig {
     s1: number;
     s2: number;
     s3: number;
+    s1Domestic?: number;
+    s2Domestic?: number;
+    s1Overseas?: number;
+    s2Overseas?: number;
     revenue: number;
     production: number;
     // New fields
