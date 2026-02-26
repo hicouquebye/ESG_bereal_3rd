@@ -61,6 +61,7 @@ const EMPTY_COMPANY: CompanyConfig = {
   dartCode: "",
 
   baseEmissions: 0,
+  allowance: 0,
 
   investCapex: 0,
 
@@ -537,9 +538,10 @@ const App: React.FC = () => {
 
     const adjustedEmissions = Math.round(s1s2 * (1 + emissionChange / 100));
 
-    // 기준년도 무상할당 = 기준 배출량의 90%
-
-    const baseAllocation = selectedConfig.baseEmissions * 0.9;
+    // DB allowance 우선, 없으면 기준 배출량의 90%를 fallback으로 사용
+    const baseAllocation = (selectedConfig.allowance ?? 0) > 0
+      ? (selectedConfig.allowance as number)
+      : selectedConfig.baseEmissions * 0.9;
 
     const adjustedAllocation = Math.round(baseAllocation * ALLOCATION_SCENARIOS[allocationChange].factor);
 
@@ -1421,7 +1423,7 @@ Recommended staged plan
                     setAuctionTargetPct={setAuctionTargetPct}
                     simResult={simResult}
                     currentETSPrice={currentETSPrice}
-                    baseAllocation={selectedConfig.baseEmissions * 0.9}
+                    baseAllocation={(selectedConfig.allowance ?? 0) > 0 ? (selectedConfig.allowance as number) : selectedConfig.baseEmissions * 0.9}
                     tranches={tranches}
                     setTranches={setTranches}
                     simBudget={simBudget}

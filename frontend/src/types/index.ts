@@ -13,6 +13,7 @@ export interface CompanyConfig {
     name: string;
     dartCode: string;
     baseEmissions: number; // 기준 배출량
+    allowance?: number; // 무상 할당량 (DB 값 우선 사용)
     targetSavings: number; // 목표 절감률
     // Extra data for simulation/dashboard
     s1: number;
