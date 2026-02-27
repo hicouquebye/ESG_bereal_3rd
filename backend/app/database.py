@@ -19,9 +19,12 @@ SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{DB_USER}:{quote_plus(DB_PASSWORD)}@
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    pool_pre_ping=True,  # 연결 끊김 자동 감지
-    pool_recycle=3600,   # 1시간마다 연결 재활용
-    connect_args={"connect_timeout": 5} # 연결 타임아웃 5초
+    pool_size=5,          # 다시 5로 하향 조정
+    max_overflow=0,       # 초과 연결 허용 안 함 (안정성 우선)
+    pool_pre_ping=True,
+    pool_recycle=1800,    # 재활용 주기를 30분으로 단축
+    pool_timeout=10,      # 연결 대기 시간 10초 제한
+    connect_args={"connect_timeout": 5}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
