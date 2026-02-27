@@ -869,28 +869,47 @@ class AIService:
         if not settings.OPENAI_API_KEY:
             return fallback_text
 
+        # 탄소 집약도용 예시
+        carbon_examples = f"""
+[예시 1 - 지표 값이 평균보다 낮아 효율성이 우수할 시]
+<strong class="text-white">{my_company}</strong>은(는) 현재 업계 평균보다 우수한 탄소 배출 효율성을 보이고 있으나, 상위 10% 진입을 위해서는 {intensity_label}의 <span class="text-[#10b77f] font-bold">15.0% 추가 감축</span>이 필요합니다. 선두 기업({best_company}) 수준의 도약을 위해서는 공급망 단위의 <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">Scope 3 저감 및 친환경 원료 전환</span>에 집중하는 전략적 투자가 요구됩니다.
+
+[예시 2 - 지표 값이 평균보다 높아 효율성이 저조할 시]
+<strong class="text-white">{my_company}</strong>은(는) 현재 탄소 배출량이 업계 평균에 미치지 못하고 있으며, 글로벌 규제 대응을 위해서는 {intensity_label}의 <span class="text-[#10b77f] font-bold">32.5% 대폭 감축</span>이 시급합니다. 선두 기업({best_company})과 경쟁하려면 다배출 공정을 전면 재검토하고 <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">저탄소 에너지원 비중 확대</span>가 필요합니다.
+
+[예시 3 - 상위권 달성 시]
+<strong class="text-white">{my_company}</strong>은(는) 이미 업계 상위 10%에 진입하여 탄소 관리 부문에서 압도적인 포지션을 점하고 있습니다. 초격차 유지를 향한 한계 돌파를 위해서는 <span class="text-[#10b77f] font-bold">혁신 감축 기술 발굴</span>과 <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">저탄소 밸류체인 생태계 확장</span> 상용화를 주도해야 합니다.
+"""
+
+        # 에너지 집약도용 예시
+        energy_examples = f"""
+[예시 1 - 지표 값이 평균보다 낮아 효율성이 우수할 시]
+<strong class="text-white">{my_company}</strong>은(는) 현재 업계 평균보다 우수한 에너지 사용 효율을 보이고 있으나, 상위 10% 진입을 위해서는 {intensity_label}의 <span class="text-[#10b77f] font-bold">15.0% 추가 절감</span>이 필요합니다. 선두 기업({best_company}) 수준의 도약을 위해서는 노후 설비 개체 및 <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">스마트 에너지 관리 시스템(FEMS) 도입</span>에 집중하는 전략적 투자가 요구됩니다.
+
+[예시 2 - 지표 값이 평균보다 높아 효율성이 저조할 시]
+<strong class="text-white">{my_company}</strong>은(는) 현재 에너지 낭비가 업계 평균을 초과하고 있어, 글로벌 탑티어 도약을 위해서는 {intensity_label}의 <span class="text-[#10b77f] font-bold">32.5% 대폭 개선</span>이 시급합니다. 선두 기업({best_company})과 같은 제조 경쟁력을 확보하려면 에너지 다소비 핵심 공정의 열효율을 높이고 <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">폐열 회수 기술 적용</span>이 필요합니다.
+
+[예시 3 - 상위권 달성 시]
+<strong class="text-white">{my_company}</strong>은(는) 이미 에너지 효율 부문에서 업계 상위 10%에 진입하여 압도적인 원가 경쟁력을 점하고 있습니다. 초격차 유지를 향한 한계 돌파를 위해서는 <span class="text-[#10b77f] font-bold">초고효율 차세대 설비 R&D</span>와 <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">AI 기반 제조 전력망 최적화</span>를 전사적으로 주도해야 합니다.
+"""
+
+        examples = carbon_examples if intensity_type == 'revenue' else energy_examples
+        
         prompt = f"""당신은 날카로운 통찰력을 지닌 ESG 전략 컨설턴트입니다.
 다음의 데이터를 기반으로 기업 로고 옆에 띄울 짧고 강력한 '전략적 인사이트' 2문장을 한국어로 작성해 주세요. HTML 태그(<strong class="text-white">, <span class="text-[#10b77f] font-bold">, <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4"> 등)를 반드시 포함하여 핵심 문구를 강조해야 합니다. 마크다운의 **굵게**는 쓰지 말고 HTML만 사용하세요.
 
 [데이터]
-- 분석 대상 기업: 우리 기업
+- 분석 대상 기업: {my_company}
 - 지표 종류: {intensity_label} (낮을수록 좋음)
-- 우리 기업의 지표 값: {my_intensity:.2f}
+- {my_company}의 지표 값: {my_intensity:.2f}
 - 업계 평균(Median): {median_intensity:.2f}
 - 상위 10% 컷오프: {top10_intensity:.2f}
 - 상위 10% 진입을 위한 필요 감축률: 약 {pct_to_top10:.1f}%
 - 1위 기업(선두): {best_company}
-- 우리 기업이 평균보다 우수한가? {'예' if is_better_than_median else '아니오'}
+- {my_company}이(가) 평균보다 우수한가? {'예' if is_better_than_median else '아니오'}
 
-[예시 1 - 평균 상회 시]
-<strong class="text-white">우리 기업</strong>은 현재 업계 평균(Median)을 상회하는 효율성을 보이고 있으나, 상위 10% 진입을 위해서는 {intensity_label}의 <span class="text-[#10b77f] font-bold">15.0% 추가 감축</span>이 필요합니다. 선두 기업의 독보적 경쟁력은 공급망 탄소 관리에서의 <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">Scope 3 감축 기술력</span>에서 기인합니다.
-
-[예시 2 - 평균 하회 시]
-<strong class="text-white">우리 기업</strong>은 현재 업계 평균에 미치지 못하고 있으며, 글로벌 탑티어 도약을 위해서는 {intensity_label}의 <span class="text-[#10b77f] font-bold">32.5% 대폭 감축</span>이 시급합니다. 선두 기업의 원동력은 화석연료 비중을 대폭 줄인 <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">재생에너지 100% 전환</span>입니다.
-
-[예시 3 - 상위권 달성 시]
-<strong class="text-white">우리 기업</strong>은 이미 업계 상위 10%에 진입하여 압도적인 포지션을 점하고 있습니다. 1위와의 격차를 없애려면 <span class="text-[#10b77f] font-bold">혁신 공정 도입</span>을 통한 한계 돌파가 필요하며, 선두 기업({best_company})이 선점한 <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">탄소포집(CCUS) 기술</span> 상용화를 벤치마킹해야 합니다.
-
+주어진 데이터 범위를 넘어서 특정 기업이 "재생에너지 100% 전환", "RE100 달성" 혹은 기재되지 않은 "특정 기술"을 이미 사용 중이라는 허위 사실을 지어내지 마세요. 선두 그룹(또는 압도적 포지션) 진입이나 기술적 한계를 돌파하기 위한 '일반적이고 타당한' 전략적 방향을 방향성으로 제시하세요.
+{examples}
 """
 
         try:

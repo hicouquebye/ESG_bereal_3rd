@@ -64,7 +64,7 @@ export const CompareTab: React.FC<CompareTabProps> = ({
             setIsInsightError(false);
             try {
                 const myComp = chartData.find(c => c.id === internalSelectedCompId) || chartData[0];
-                const bestComp = chartData[chartData.length - 1]; // sorted ascending (lowest is best)
+                const bestComp = chartData[0]; // sorted ascending (lowest is best)
 
                 const reqData = {
                     my_company: myComp.name,
