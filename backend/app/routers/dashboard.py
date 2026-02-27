@@ -155,7 +155,7 @@ def get_companies(db: Session = Depends(get_db)):
                 "s3Overseas": s3_abroad,
                 "revenue": e.revenue or 0,
                 "energy_intensity": e.energy_intensity or 0,
-                "carbon_intensity": e.carbon_intensity or 0,
+                "carbon_intensity": e.carbon_intensity or 0, # DB 값 직접 사용
                 "carbon_intensity_scope1": e.carbon_intensity_scope1 or 0,
                 "carbon_intensity_scope2": e.carbon_intensity_scope2 or 0,
                 "carbon_intensity_scope3": e.carbon_intensity_scope3 or 0,
