@@ -48,6 +48,8 @@ interface SimulatorTabProps {
     // Split Purchase Portfolio Props
     tranches: Tranche[];
     setTranches: (tranches: Tranche[]) => void;
+    useKetsBuySimulation: boolean;
+    setUseKetsBuySimulation: (v: boolean) => void;
     simBudget: number;
     setSimBudget: (v: number) => void;
     liveKetsPrice: number;
@@ -83,13 +85,69 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     simResult: r,
     auctionEnabled, setAuctionEnabled, auctionTargetPct, setAuctionTargetPct,
     currentETSPrice, baseAllocation, overseasBaseEmissions,
-    tranches, setTranches, simBudget, setSimBudget, liveKetsPrice, liveEutsPrice, eurKrwRate, auctionSavingsRate
+    tranches, setTranches, useKetsBuySimulation, setUseKetsBuySimulation, simBudget, setSimBudget, liveKetsPrice, liveEutsPrice, eurKrwRate, auctionSavingsRate
 }: SimulatorTabProps) => {
     // Procurement calculations for the visual bar
     const freeAllocPct = r.adjustedEmissions > 0 ? Math.min(100, (r.adjustedAllocation / r.adjustedEmissions) * 100) : 0;
     const remainPct = 100 - freeAllocPct;
     const auctionPct = auctionEnabled ? Math.min(remainPct, auctionTargetPct) : 0;
     const marketPct = Math.max(0, remainPct - auctionPct);
+    const ketsTranches = useMemo(
+        () => tranches.filter((t) => t.market === 'K-ETS'),
+        [tranches]
+    );
+    const ketsTranchePctSum = useMemo(
+        () => ketsTranches.reduce((sum, t) => sum + t.percentage, 0),
+        [ketsTranches]
+    );
+    const ketsWeightedUnitPrice = useMemo(() => {
+        if (ketsTranches.length === 0 || ketsTranchePctSum <= 0) return currentETSPrice;
+        return ketsTranches.reduce((sum, t) => sum + (t.price * t.percentage), 0) / ketsTranchePctSum;
+    }, [ketsTranches, ketsTranchePctSum, currentETSPrice]);
+    const ketsBuySimCost = useMemo(
+        () => Math.round(r.netExposure * ketsWeightedUnitPrice),
+        [r.netExposure, ketsWeightedUnitPrice]
+    );
+
+    const updateKetsTranche = (id: number, patch: Partial<Tranche>) => {
+        setTranches(
+            tranches.map((t) => (t.id === id ? { ...t, ...patch } : t))
+        );
+    };
+
+    const updateKetsTranchePct = (id: number, rawPct: number) => {
+        const target = tranches.find((t) => t.id === id);
+        if (!target) return;
+        const othersSum = tranches
+            .filter((t) => t.market === 'K-ETS' && t.id !== id)
+            .reduce((sum, t) => sum + t.percentage, 0);
+        const maxAllowed = Math.max(0, 100 - othersSum);
+        const nextPct = Math.max(0, Math.min(rawPct, maxAllowed));
+        updateKetsTranche(id, { percentage: nextPct });
+    };
+
+    const addKetsTranche = () => {
+        const nextIndex = ketsTranches.length + 1;
+        const seedPrice = priceScenario === 'custom'
+            ? Math.max(0, Math.round(customPrice))
+            : Math.max(0, Math.round(liveKetsPrice));
+        setTranches([
+            ...tranches,
+            {
+                id: Date.now(),
+                market: 'K-ETS',
+                price: seedPrice,
+                month: `${nextIndex}차`,
+                isFuture: false,
+                percentage: 0,
+            },
+        ]);
+    };
+
+    const removeKetsTranche = (id: number) => {
+        if (ketsTranches.length <= 1) return;
+        setTranches(tranches.filter((t) => t.id !== id));
+    };
 
     // 연평균 시장가 (툴팁 표시용)
     const avgMarketPrice = useMemo(() => {
@@ -543,6 +601,91 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                         className="w-full h-1.5 bg-slate-200 rounded-full cursor-pointer accent-emerald-500 appearance-none" />
                                     <div className="flex justify-between text-[10px] text-slate-400 mt-2 font-mono">
                                         <span>−50%</span><span>0%</span><span>+50%</span>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 border-t border-slate-200/60 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs text-slate-500 uppercase font-bold tracking-wide">K-ETS 매수 시뮬레이션</label>
+                                        <button
+                                            onClick={() => setUseKetsBuySimulation(!useKetsBuySimulation)}
+                                            className={cn(
+                                                "relative w-10 h-5 rounded-full transition-all duration-300",
+                                                useKetsBuySimulation ? "bg-blue-500" : "bg-slate-300"
+                                            )}
+                                        >
+                                            <span className={cn(
+                                                "absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300",
+                                                useKetsBuySimulation ? "translate-x-5" : "translate-x-0"
+                                            )} />
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 font-medium">
+                                        K-ETS 분할 단가의 가중평균을 국내 이행 단가로 사용합니다. (EU-ETS 미포함)
+                                    </p>
+                                    <div className="space-y-2">
+                                        {ketsTranches.map((tranche) => (
+                                            <div key={tranche.id} className="grid grid-cols-12 gap-2 items-center bg-white border border-slate-200 rounded-lg p-2">
+                                                <div className="col-span-2 text-[11px] font-bold text-slate-500 text-center">
+                                                    {tranche.month}
+                                                </div>
+                                                <div className="col-span-5 flex items-center gap-1">
+                                                    <span className="text-[11px] text-slate-400">₩</span>
+                                                    <input
+                                                        type="number"
+                                                        value={tranche.price}
+                                                        min={0}
+                                                        onChange={(e) => updateKetsTranche(tranche.id, { price: Math.max(0, Number(e.target.value) || 0) })}
+                                                        className="w-full bg-transparent text-sm font-bold text-slate-800 focus:outline-none"
+                                                    />
+                                                </div>
+                                                <div className="col-span-4 flex items-center gap-2">
+                                                    <input
+                                                        type="range"
+                                                        min={0}
+                                                        max={100}
+                                                        step={5}
+                                                        value={tranche.percentage}
+                                                        onChange={(e) => updateKetsTranchePct(tranche.id, Number(e.target.value))}
+                                                        className="w-full h-1.5 bg-slate-200 rounded-full cursor-pointer accent-emerald-500 appearance-none"
+                                                    />
+                                                    <span className="text-[11px] font-bold text-slate-600 w-10 text-right">{tranche.percentage}%</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => removeKetsTranche(tranche.id)}
+                                                    disabled={ketsTranches.length <= 1}
+                                                    className="col-span-1 flex items-center justify-center text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                    title="행 삭제"
+                                                >
+                                                    <Trash2 size={12} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <button
+                                            onClick={addKetsTranche}
+                                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-dashed border-slate-300 text-[11px] font-bold text-slate-500 hover:border-emerald-400 hover:text-emerald-600 transition-colors"
+                                        >
+                                            <Plus size={12} />
+                                            K-ETS 매수 행 추가
+                                        </button>
+                                        <div className="text-right">
+                                            <div className="text-[10px] text-slate-400 font-bold">가중평균 단가</div>
+                                            <div className="text-sm font-black text-blue-700">₩{fmt(Math.round(ketsWeightedUnitPrice))}</div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="bg-slate-100 rounded-lg px-3 py-2">
+                                            <div className="text-[10px] text-slate-400 font-bold">비중 합계</div>
+                                            <div className={cn("text-sm font-black", Math.abs(ketsTranchePctSum - 100) < 0.001 ? "text-emerald-600" : "text-amber-600")}>
+                                                {ketsTranchePctSum}%
+                                            </div>
+                                        </div>
+                                        <div className="bg-slate-100 rounded-lg px-3 py-2">
+                                            <div className="text-[10px] text-slate-400 font-bold">매수 기준 예상비용</div>
+                                            <div className="text-sm font-black text-slate-800">₩{fmt(ketsBuySimCost)}</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

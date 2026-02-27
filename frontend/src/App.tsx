@@ -174,12 +174,10 @@ const App: React.FC = () => {
   const [timeRange, setTimeRange] = useState<TimeRangeType>('1년');
 
   const [tranches, setTranches] = useState<Tranche[]>([
-
-    { id: 1, market: 'K-ETS', price: 15200, month: '25.10', isFuture: false, percentage: 30 },
-
-    { id: 2, market: 'EU-ETS', price: 74.20, month: '26.01', isFuture: false, percentage: 50 },
-
+    { id: 1, market: 'K-ETS', price: 15200, month: '1차', isFuture: false, percentage: 50 },
+    { id: 2, market: 'K-ETS', price: 14900, month: '2차', isFuture: false, percentage: 50 },
   ]);
+  const [useKetsBuySimulation, setUseKetsBuySimulation] = useState<boolean>(false);
 
   const [simBudget, setSimBudget] = useState<number>(350);
   const [eurKrwRate, setEurKrwRate] = useState<number>(1450);
@@ -538,13 +536,10 @@ const App: React.FC = () => {
         if (t.id === 1 && t.price === 15200 && latestKetsData.price !== 15200) {
           return { ...t, price: latestKetsData.price };
         }
-        if (t.id === 2 && t.price === 74.20 && latestEutsData.price !== 74.20) {
-          return { ...t, price: latestEutsData.price };
-        }
         return t;
       }));
     }
-  }, [latestKetsData.price, latestEutsData.price, fullHistoryData.length]);
+  }, [latestKetsData.price, fullHistoryData.length]);
 
   // === 경매 절감률 동적 계산: (연평균시장가 - 연평균경매낙찰가) / 연평균시장가 × 100 ===
   const auctionSavingsRate = useMemo(() => {
@@ -559,6 +554,15 @@ const App: React.FC = () => {
   // === K-ETS Simulator Calculation (3-Step Formula) ===
 
   const currentETSPrice = priceScenario === 'custom' ? customPrice : latestKetsData.price;
+  const ketsBuySimPrice = useMemo(() => {
+    const ketsTranches = tranches.filter(t => t.market === 'K-ETS' && t.percentage > 0);
+    if (ketsTranches.length === 0) return currentETSPrice;
+    const totalPct = ketsTranches.reduce((sum, t) => sum + t.percentage, 0);
+    if (totalPct <= 0) return currentETSPrice;
+    const weightedPrice = ketsTranches.reduce((sum, t) => sum + (t.price * t.percentage), 0) / totalPct;
+    return weightedPrice;
+  }, [tranches, currentETSPrice]);
+  const effectiveKetsPrice = useKetsBuySimulation ? ketsBuySimPrice : currentETSPrice;
 
   const simResult = useMemo<SimResult>(() => {
     // 시뮬레이터는 국내 직접 배출량 기준(S1+S2 domestic)으로 계산
@@ -592,15 +596,15 @@ const App: React.FC = () => {
     const totalAbatementCost = 0;
 
     // === 합산 ===
-    let complianceCostCurrent = netExposure * currentETSPrice;
+    let complianceCostCurrent = netExposure * effectiveKetsPrice;
 
     // 경매 참여 시 할인율 적용 (조달 비중만큼 할인)
     if (auctionEnabled && netExposure > 0) {
       const auctionVol = netExposure * (auctionTargetPct / 100);
       const marketVol = netExposure - auctionVol;
       const discountFactor = 1 - (auctionSavingsRate / 100);
-      const auctionPrice = currentETSPrice * discountFactor;
-      complianceCostCurrent = (auctionVol * auctionPrice + marketVol * currentETSPrice);
+      const auctionPrice = effectiveKetsPrice * discountFactor;
+      complianceCostCurrent = (auctionVol * auctionPrice + marketVol * effectiveKetsPrice);
     }
 
     // 포트폴리오 확정값이 있으면 덮어씌움 (기능 제거됨: 실시간으로 계산 결과 표시)
@@ -637,11 +641,11 @@ const App: React.FC = () => {
 
       name: 'A', label: '최적 전략',
 
-      complianceCost: econPurchase * currentETSPrice,
+      complianceCost: econPurchase * effectiveKetsPrice,
 
       abatementCost: econAbatementCost * 1e8,
 
-      totalCost: (econPurchase * currentETSPrice) + (econAbatementCost * 1e8),
+      totalCost: (econPurchase * effectiveKetsPrice) + (econAbatementCost * 1e8),
 
       appliedReductions: economicOptions.map(r => r.name),
 
@@ -662,17 +666,17 @@ const App: React.FC = () => {
       name: 'B', label: '전량 구매',
 
 
-      complianceCost: baseNetExposure * currentETSPrice / 1e8,
+      complianceCost: baseNetExposure * effectiveKetsPrice / 1e8,
 
       abatementCost: 0,
 
-      totalCost: baseNetExposure * currentETSPrice / 1e8,
+      totalCost: baseNetExposure * effectiveKetsPrice / 1e8,
 
       appliedReductions: [],
 
       purchaseVolume: baseNetExposure,
 
-      explanation: `순노출량 ${baseNetExposure.toLocaleString()}t × ₩${currentETSPrice.toLocaleString()} = ₩${(baseNetExposure * currentETSPrice).toLocaleString()}`
+      explanation: `순노출량 ${baseNetExposure.toLocaleString()}t × ₩${Math.round(effectiveKetsPrice).toLocaleString()} = ₩${Math.round(baseNetExposure * effectiveKetsPrice).toLocaleString()}`
 
     };
 
@@ -688,11 +692,11 @@ const App: React.FC = () => {
 
       name: 'C', label: '공격적 (전체 감축)',
 
-      complianceCost: allPurchase * currentETSPrice,
+      complianceCost: allPurchase * effectiveKetsPrice,
 
       abatementCost: allAbatementCost * 1e8,
 
-      totalCost: (allPurchase * currentETSPrice) + (allAbatementCost * 1e8),
+      totalCost: (allPurchase * effectiveKetsPrice) + (allAbatementCost * 1e8),
 
       appliedReductions: allThisYearOptions.map(r => r.name),
 
@@ -722,7 +726,7 @@ const App: React.FC = () => {
 
     };
 
-  }, [selectedComp, emissionChange, allocationChange, selectedConfig, currentETSPrice, auctionEnabled, auctionTargetPct]);
+  }, [selectedComp, emissionChange, allocationChange, selectedConfig, currentETSPrice, effectiveKetsPrice, auctionEnabled, auctionTargetPct]);
 
   // [핵심] DB의 집약도 데이터로 집약도 계산
 
@@ -1444,7 +1448,7 @@ Recommended staged plan
                     auctionTargetPct={auctionTargetPct}
                     setAuctionTargetPct={setAuctionTargetPct}
                     simResult={simResult}
-                    currentETSPrice={currentETSPrice}
+                    currentETSPrice={effectiveKetsPrice}
                     baseAllocation={(selectedConfig.allowance ?? 0) > 0 ? (selectedConfig.allowance as number) : selectedConfig.baseEmissions * 0.9}
                     overseasBaseEmissions={Math.max(
                       0,
@@ -1453,6 +1457,8 @@ Recommended staged plan
                     )}
                     tranches={tranches}
                     setTranches={setTranches}
+                    useKetsBuySimulation={useKetsBuySimulation}
+                    setUseKetsBuySimulation={setUseKetsBuySimulation}
                     simBudget={simBudget}
                     setSimBudget={setSimBudget}
                     liveKetsPrice={latestKetsData.price}
