@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>비즈니스 모델 전략 - 1 (요약본)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .slide {
+            width: 1280px;
+            height: 720px;
+            background: white;
+            border-radius: 12px;
+            padding: 50px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .step-arrow {
+            position: absolute;
+            right: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #cbd5e1;
+            font-size: 2rem;
+            z-index: 10;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="slide">
+        <!-- Header -->
+        <h1 class="text-4xl font-black text-slate-800 mb-2">01 시장 진입(GTM) 및 Scale-up 로드맵</h1>
+        <p class="text-slate-500 font-medium text-lg mb-8">핵심 규제 대상을 공략하고, 기존 시스템에 침투하여 탄소 금융망으로 진화합니다.</p>
+
+        <!-- 1. Targeting -->
+        <div class="mb-10">
+            <h3 class="text-xl font-bold border-b-2 border-slate-800 pb-2 inline-block mb-5 text-slate-800">🎯
+                투트랙(Two-Track) 공략 타겟</h3>
+            <div class="flex gap-6">
+                <!-- Target 1 -->
+                <div
+                    class="flex-1 bg-emerald-50 rounded-2xl p-6 border border-emerald-100 flex items-center gap-5 shadow-sm">
+                    <div class="text-5xl">🏭</div>
+                    <div>
+                        <div class="text-sm font-bold text-emerald-600 mb-1">Direct Sales (직접 영업)</div>
+                        <h4 class="text-xl font-black text-slate-800 mb-1">대규모 배출 규제 상장사</h4>
+                        <p class="text-sm text-slate-600">K-ETS 4차 유상할당 폭탄 대비 현금(재무) 방어가 시급한 <b>CFO 및 전략기획실</b></p>
+                    </div>
+                </div>
+                <!-- Target 2 -->
+                <div class="flex-1 bg-blue-50 rounded-2xl p-6 border border-blue-100 flex items-center gap-5 shadow-sm">
+                    <div class="text-5xl">💼</div>
+                    <div>
+                        <div class="text-sm font-bold text-blue-600 mb-1">Partnership (인프라 침투)</div>
+                        <h4 class="text-xl font-black text-slate-800 mb-1">대형 회계법인·컨설팅 펌</h4>
+                        <p class="text-sm text-slate-600">수천 개 기업을 실사하기 위해 수작업 자동화 툴이 필요한 <b>회계·ESG 감사관</b></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Roadmap -->
+        <div class="flex-1 flex flex-col justify-end">
+            <h3 class="text-xl font-bold border-b-2 border-slate-800 pb-2 inline-block mb-5 text-slate-800">🚀 3단계 로드맵
+                (Roadmap)</h3>
+            <div class="flex gap-4 relative h-40">
+
+                <!-- Phase 1 -->
+                <div class="flex-1 bg-slate-50 border-2 border-slate-200 rounded-xl p-5 relative">
+                    <div class="absolute -top-3 left-4 bg-slate-700 text-white text-xs font-bold px-3 py-1 rounded">1단계
+                        (현재)</div>
+                    <div class="step-arrow">▶</div>
+                    <h4 class="text-lg font-black text-slate-800 mt-3 mb-2">MVP 출시</h4>
+                    <p class="text-sm text-slate-600">AI 비정형 구조화 및 <b>K-ETS 시뮬레이터</b> 상용화로 긴급 리스크 진단 제공</p>
+                </div>
+
+                <!-- Phase 2 -->
+                <div
+                    class="flex-1 bg-emerald-50 border-2 border-emerald-400 rounded-xl p-5 relative shadow-lg shadow-emerald-500/10 transform -translate-y-2">
+                    <div class="absolute -top-3 left-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded">
+                        2단계 (침투)</div>
+                    <div class="step-arrow">▶</div>
+                    <h4 class="text-lg font-black text-emerald-800 mt-3 mb-2">기존 ERP Add-on 연동</h4>
+                    <p class="text-sm text-emerald-700">전면 교체가 불필요하도록 기존 <b>SAP 등 거대 패키지에 플러그인(API) 탑재</b></p>
+                </div>
+
+                <!-- Phase 3 -->
+                <div class="flex-1 bg-blue-50 border-2 border-blue-400 rounded-xl p-5 relative">
+                    <div class="absolute -top-3 left-4 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded">3단계
+                        (도약)</div>
+                    <h4 class="text-lg font-black text-blue-800 mt-3 mb-2">무허가 금융 정보망 구축</h4>
+                    <p class="text-sm text-blue-700">잉여-매수 그룹 간 최적 단가(MAC) 장외 매칭 정보 <b>구독 서비스(블룸버그 모델)</b> 제공</p>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</body>
+
+</html>

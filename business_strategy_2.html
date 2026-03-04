@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>비즈니스 모델 전략 - 2 (요약본)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .slide {
+            width: 1280px;
+            height: 720px;
+            background: white;
+            border-radius: 12px;
+            padding: 50px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .arrow-down {
+            text-align: center;
+            font-size: 1.5rem;
+            color: #94a3b8;
+            margin: 4px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="slide">
+        <!-- Header -->
+        <h1 class="text-4xl font-black text-slate-800 mb-2">02 강력한 투트랙(Two-Track) 수익 모델</h1>
+        <p class="text-slate-500 font-medium text-lg mb-8">안정적인 SaaS 구독 수익과 더불어 생태계를 장악하는 플라이휠(Flywheel) 구조입니다.</p>
+
+        <div class="flex gap-10 flex-1">
+            <!-- Left: Direct Revenue -->
+            <div class="flex-[1.2] flex flex-col gap-5">
+                <h3 class="text-xl font-bold border-b-2 border-slate-800 pb-2 inline-block text-slate-800 shrink-0">💸
+                    핵심 캐시카우(Cash-Cow)</h3>
+
+                <!-- BM 1 -->
+                <div class="bg-indigo-50 border border-indigo-200 p-6 rounded-2xl flex-1 shadow-sm flex flex-col">
+                    <div class="flex items-center gap-3 mb-3">
+                        <span class="bg-indigo-600 text-white text-xs px-2 py-1 rounded font-bold">BM 1</span>
+                        <h4 class="text-xl font-black text-indigo-900">B2B SaaS 라이선스 플랜</h4>
+                    </div>
+                    <ul class="space-y-3 mt-2 text-sm text-slate-700 h-full">
+                        <li class="flex items-start gap-2">
+                            <span class="text-indigo-500">✔️</span>
+                            <span>대시보드와 시뮬레이터 플러그인 이용 권한 <b>(월간/연간 구독제)</b></span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-indigo-500">✔️</span>
+                            <span>기본 모니터링(Basic)부터, 몬테카를로 확률 시뮬레이터(Pro)까지 <b>티어별 차등 패키지 과금</b></span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- BM 2 -->
+                <div
+                    class="bg-emerald-50 border-2 border-emerald-400 p-6 rounded-2xl flex-1 shadow-md flex flex-col relative transform hover:-translate-y-1 transition-transform">
+                    <div
+                        class="absolute -top-3 -right-3 bg-emerald-500 text-white font-black px-3 py-1 rounded shadow-lg text-xs tracking-wider">
+                        가장 현실적인 핵심 BM</div>
+                    <div class="flex items-center gap-3 mb-3">
+                        <span class="bg-emerald-600 text-white text-xs px-2 py-1 rounded font-bold">BM 2</span>
+                        <h4 class="text-xl font-black text-emerald-900">하이브리드 추출 API 종량제</h4>
+                    </div>
+                    <ul class="space-y-3 mt-2 text-sm text-slate-700 h-full">
+                        <li class="flex items-start gap-2">
+                            <span class="text-emerald-500">✔️</span>
+                            <div>경쟁 솔루션 및 평가사가 자체 구축 대신 우리의 <b>API(Docling+Vision)를 호출할 때마다 단가 징수.</b> UI가 없는 생태계 지배 모델.
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-emerald-500">✔️</span>
+                            <span><b>[보안 이슈 원천 차단]</b> 기업 데이터가 서버에 남지 않는 Stateless API 설계 적용 확립.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Right: Flywheel Strategy -->
+            <div class="flex-1 flex flex-col">
+                <h3
+                    class="text-xl font-bold border-b-2 border-slate-800 pb-2 inline-block text-slate-800 shrink-0 mb-5">
+                    🔄 플랫폼 선순환 (Flywheel) 파트너십</h3>
+
+                <div
+                    class="bg-slate-50 border border-slate-200 p-8 rounded-2xl shadow-inner flex-1 flex flex-col items-center justify-between">
+
+                    <!-- Step 1 -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-300 shadow-sm w-full text-center">
+                        <h4 class="font-black text-slate-800 t text-lg">1. 회계·컨설팅 펌 독점 제휴</h4>
+                        <p class="text-xm text-slate-500 mt-1 font-medium">실사 단체에 우리의 도구를 '기본 평가 툴(SOP)'로 제공</p>
+                    </div>
+
+                    <div class="arrow-down">⬇️</div>
+
+                    <!-- Step 2 -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-300 shadow-sm w-full text-center">
+                        <h4 class="font-black text-slate-800 text-lg">2. 락인(Lock-in) 방산 효과</h4>
+                        <p class="text-xm text-slate-500 mt-1 font-medium">컨설턴트가 거쳐간 대규모 고객사들이 편의에 의해 우리 시스템을 연달아 <b>초기
+                                구독</b></p>
+                    </div>
+
+                    <div class="arrow-down">⬇️</div>
+
+                    <!-- Step 3 -->
+                    <div
+                        class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-xl w-full text-center relative overflow-hidden">
+                        <div class="absolute inset-0 bg-blue-500 opacity-20 blur-md"></div>
+                        <h4 class="font-black text-emerald-400 text-lg relative z-10">3. 데이터 모네타이징 (제 3의 수익)</h4>
+                        <p class="text-xm text-slate-300 mt-1 font-medium relative z-10">축적된 기업 재무·탄소 데이터를 <b>산업군
+                                평균(Index)화로 익명 가공.</b> 증권사·국가 기관에 거시 지표 리포트 매각.</p>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</body>
+
+</html>

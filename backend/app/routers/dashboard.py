@@ -143,7 +143,7 @@ def get_companies(db: Session = Depends(get_db)):
         if e.year >= current_latest_year:
             companies[e.company_id].update({
                 "latestReportYear": e.year,
-                "baseEmissions": e.base_emissions,
+                "baseEmissions": e.base_emissions if e.base_emissions is not None else ((e.scope1 or 0) + (e.scope2 or 0)),
                 "s1": s1_total,
                 "s2": s2_total,
                 "s3": s3_total,

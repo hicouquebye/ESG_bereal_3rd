@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K-ETS 무상할당 추세</title>
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* 깔끔한 웹 폰트 적용 (PPT 친화적) */
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        body {
+            font-family: 'Pretendard', -apple-system, sans-serif;
+            background-color: #f8fafc; /* 밝은 슬레이트 계열 배경 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .infographic-card {
+            background-color: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+            width: 900px;
+            padding: 40px;
+            border: 1px solid #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="infographic-card aspect-video relative overflow-hidden">
+        <!-- Decoration -->
+        <div class="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-64 bg-slate-900/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+        
+        <!-- Header -->
+        <div class="mb-10 relative z-10">
+            <div class="flex items-center gap-3 mb-2">
+                <span class="px-3 py-1 bg-rose-100 text-rose-600 font-bold text-xs rounded-full uppercase tracking-widest">Regulatory Risk</span>
+                <span class="text-slate-400 font-medium text-sm">환경부 배출권거래제 제4차 기본계획(안)</span>
+            </div>
+            <h1 class="text-3xl font-black text-slate-900 tracking-tight">K-ETS 무상할당 비율 축소 타임라인</h1>
+            <p class="text-slate-500 mt-2 font-medium">점진적인 무상할당 감소에 따른 폭발적인 <strong class="text-rose-500 font-bold">비용 충격(재무 리스크)</strong> 대비 필수</p>
+        </div>
+
+        <!-- Chart Area -->
+        <div class="relative w-full h-80 z-10">
+            <canvas id="trendChart"></canvas>
+        </div>
+
+        <!-- Footer / Insight Box -->
+        <div class="mt-8 grid grid-cols-3 gap-6 relative z-10">
+            <div class="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                <div class="text-4xl font-black text-slate-300 mb-1">100%</div>
+                <div class="text-sm font-bold text-slate-700">1차 계획기간 (과거)</div>
+                <div class="text-xs text-slate-500 mt-1">도입 초기 전량 무상 지급</div>
+            </div>
+            <div class="bg-emerald-50 p-5 rounded-2xl border border-emerald-100">
+                <div class="text-4xl font-black text-emerald-400 mb-1">90%</div>
+                <div class="text-sm font-bold text-emerald-800">3차 계획기간 (현재)</div>
+                <div class="text-xs text-emerald-600 mt-1">유상할당 비율 10% 확대</div>
+            </div>
+            <div class="bg-rose-50 p-5 rounded-2xl border border-rose-200 shadow-sm relative overflow-hidden">
+                <div class="absolute top-0 right-0 px-2 py-0.5 bg-rose-500 text-white text-[10px] font-black rounded-bl-lg">CRITICAL</div>
+                <div class="text-4xl font-black text-rose-500 mb-1">80%<span class="text-lg">↓</span></div>
+                <div class="text-sm font-bold text-rose-900">4차 계획기간 (2026~)</div>
+                <div class="text-xs text-rose-600 mt-1">유상할당 20% 이상 (발전 50%) 확대<br>👉 시뮬레이터 조달 믹스 필수</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        
+        // Gradient for the line
+        let gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(16, 183, 127, 0.4)'); // Emerald
+        gradient.addColorStop(1, 'rgba(16, 183, 127, 0.0)');
+
+        const data = {
+            labels: ['1차 (2015~17)', '2차 (2018~20)', '3차 (2021~25)', '4차 (2026~30 예상)'],
+            datasets: [{
+                label: '무상할당 비율(%)',
+                data: [100, 97, 90, 80],
+                borderColor: [
+                    '#94a3b8', // 1차 slate
+                    '#10b77f', // 2차 emerald
+                    '#10b77f', // 3차 emerald
+                    '#f43f5e'  // 4차 rose (red)
+                ],
+                backgroundColor: gradient,
+                borderWidth: 4,
+                pointBackgroundColor: ['#ffffff', '#ffffff', '#ffffff', '#f43f5e'],
+                pointBorderColor: ['#94a3b8', '#10b77f', '#10b77f', '#ffffff'],
+                pointBorderWidth: 3,
+                pointRadius: 6,
+                pointHoverRadius: 8,
+                fill: true,
+                stepped: false,
+                tension: 0.3 // Smooth curves
+            }]
+        };
+
+        // Custom segment plugin to color the line dynamically
+        const config = {
+            type: 'line',
+            data: data,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        titleFont: { family: 'Pretendard', size: 13 },
+                        bodyFont: { family: 'Pretendard', size: 14, weight: 'bold' },
+                        padding: 12,
+                        cornerRadius: 8,
+                        displayColors: false,
+                        callbacks: {
+                            label: function(context) {
+                                return `무상할당량: ${context.parsed.y}%`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        min: 60,
+                        max: 105,
+                        grid: {
+                            color: '#f1f5f9',
+                            drawBorder: false,
+                        },
+                        ticks: {
+                            font: { family: 'Pretendard', size: 12, weight: '600' },
+                            color: '#94a3b8',
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false,
+                            drawBorder: false,
+                        },
+                        ticks: {
+                            font: { family: 'Pretendard', size: 13, weight: 'bold' },
+                            color: '#475569'
+                        }
+                    }
+                },
+                // segment styling to make the last line segment RED
+                segment: {
+                    borderColor: ctx => ctx.p0DataIndex === 2 ? '#f43f5e' : '#10b77f',
+                    borderDash: ctx => ctx.p0DataIndex === 2 ? [6, 6] : undefined,
+                }
+            }
+        };
+
+        new Chart(ctx, config);
+    </script>
+</body>
+</html>

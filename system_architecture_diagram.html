@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Architecture Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #0f172a;
+            margin-bottom: 30px;
+            font-size: 1.5rem;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🏛️ ESG Carbon Dashboard System Architecture</h1>
+        <div class="mermaid">
+            graph TB
+            subgraph "Client Layer"
+            Browser[웹 브라우저]
+            end
+
+            subgraph "Frontend (React 18 + TypeScript + Vite)"
+            UI[UI Components<br />Recharts / TailwindCSS 4]
+            State[State Management<br />React Hooks + localStorage]
+            Router[View State Router<br />React Router DOM]
+            end
+
+            subgraph "Backend (FastAPI + Uvicorn)"
+            Auth[Auth Router<br />/auth (JWT)]
+            Profile[Profile Router<br />/profile]
+            Dashboard[Dashboard Router<br />/api/v1/dashboard]
+            Sim[Simulator Router<br />/api/v1/sim]
+            AI[AI Router<br />/api/v1/ai]
+            end
+
+            subgraph "Data & AI Layer"
+            MySQL[(MySQL DB<br />users / dashboard_emissions)]
+            ChromaDB[(ChromaDB<br />Vector Store / RAG)]
+            OpenAI[OpenAI API<br />gpt-4o / gpt-4o-mini]
+            BGE[BGE Embedding & Reranker<br />bge-m3, bge-reranker]
+            end
+
+            subgraph "External Data Sources"
+            yfinance[Yahoo Finance<br />EU-ETS 단가 조회]
+            FDR[FinanceDataReader<br />K-ETS KAU 단가 조회]
+            end
+
+            %% 연결 관계
+            Browser --> UI
+            UI --> State --> Router
+            Router -->|Axios / REST API| Auth & Profile & Dashboard & Sim & AI
+            Auth -->|User 인증/가입| MySQL
+            Profile --> MySQL
+            Dashboard --> MySQL
+            Sim -->|실시간 탄소/에너지 단가| yfinance & FDR
+            AI -->|문서 검색| ChromaDB
+            AI -->|프롬프트 질의응답| OpenAI
+            ChromaDB -->|벡터화/검색| BGE
+        </div>
+    </div>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+
+</html>
